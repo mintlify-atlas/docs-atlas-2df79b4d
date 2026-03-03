@@ -1,0 +1,110 @@
+{
+  "projectType": "saas",
+  "projectName": "Whether",
+  "projectDescription": "Market climate station that translates macro signals into operational guidance for product and engineering leaders.",
+  "theme": "linden",
+  "primaryColor": "#2563eb",
+  "lightColor": "#60a5fa",
+  "darkColor": "#1e40af",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "introduction",
+              "how-it-works",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/regime-engine",
+              "features/decision-shield",
+              "features/time-machine",
+              "features/signal-ops",
+              "features/briefing-pack"
+            ]
+          },
+          {
+            "group": "Use Cases",
+            "pages": [
+              "use-cases/product-leaders",
+              "use-cases/cfo-finance",
+              "use-cases/coo-operations",
+              "use-cases/cto-engineering",
+              "use-cases/strategy-teams"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/understanding-regimes",
+              "guides/making-decisions",
+              "guides/historical-analysis",
+              "guides/alerts-and-notifications",
+              "guides/exporting-briefs"
+            ]
+          },
+          {
+            "group": "Data Sources",
+            "pages": [
+              "data/treasury-yields",
+              "data/macro-indicators",
+              "data/provenance"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api/overview",
+              "api/treasury",
+              "api/regime-alerts",
+              "api/weekly-digest",
+              "api/monthly",
+              "api/quarterly",
+              "api/yearly"
+            ]
+          },
+          {
+            "group": "Integration",
+            "pages": [
+              "api/agent-interface",
+              "api/webhook-integration"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Regime Engine - Classifies market conditions into actionable operating postures",
+    "Decision Shield - Validates product, hiring, and infrastructure decisions against current climate",
+    "Time Machine - Historical regime analysis with point-in-time playback",
+    "Signal Ops - Automated alerts and briefings on regime changes",
+    "CXO Function Outputs - Role-specific guidance for CFO, COO, CTO, and strategy teams",
+    "Evidence Pack - Full data provenance with source URLs and timestamps",
+    "Briefing Export - Copy-ready summaries for Slack, email, and presentations"
+  ],
+  "publicApiSurface": [
+    "GET /api/treasury - Fetch current Treasury yield curve data",
+    "GET /api/regime-alerts - Retrieve regime change alerts",
+    "GET /api/weekly-digest - Get weekly market climate summary",
+    "GET /api/monthly - Get monthly regime summary",
+    "GET /api/quarterly - Get quarterly regime summary",
+    "GET /api/yearly - Get yearly regime summary",
+    "GET /api/cadence - Get cadence alignment recommendations",
+    "GET /api/agent - Agent interface for programmatic access",
+    "Regime Classification - SCARCITY, DEFENSIVE, VOLATILE, EXPANSION",
+    "Decision Shield Categories - Lifecycle, Category, Action verdicts",
+    "Policy Assessment - CTS/RAS composite scores with governance parameters"
+  ]
+}
