@@ -1,0 +1,135 @@
+---
+title: Quarterly Summary
+api: GET /api/quarterly
+description: Quarterly market regime summary for strategic planning
+---
+
+## Endpoint
+
+```
+GET /api/quarterly
+```
+
+Returns a quarterly summary of market regime assessment, aggregating trends over a 3-month period. Useful for strategic planning cycles and board presentations.
+
+## Response
+
+<ResponseField name="summary" type="object" required>
+  Complete quarterly summary object
+  
+  <Expandable title="summary properties">
+    <ResponseField name="copy" type="string">
+      Human-readable narrative summary of quarterly regime trends
+    </ResponseField>
+    
+    <ResponseField name="provenance" type="object">
+      Data source and freshness metadata
+    </ResponseField>
+    
+    <ResponseField name="recordDateLabel" type="string">
+      Original record date label (e.g., "March 2, 2026")
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="copy" type="string" required>
+  Human-readable summary (convenience field, duplicates summary.copy)
+</ResponseField>
+
+<ResponseField name="provenance" type="object" required>
+  Data lineage information
+  
+  <Expandable title="provenance properties">
+    <ResponseField name="source" type="string">
+      Data source identifier
+    </ResponseField>
+    
+    <ResponseField name="recordDate" type="string">
+      Date of the underlying data
+    </ResponseField>
+    
+    <ResponseField name="fetchedAt" type="string">
+      When data was retrieved
+    </ResponseField>
+    
+    <ResponseField name="isLive" type="boolean">
+      Whether data is live or from fallback
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="recordDateLabel" type="string" required>
+  Original record date label (convenience field)
+</ResponseField>
+
+<ResponseField name="generatedAt" type="string" required>
+  ISO 8601 timestamp when summary was generated
+</ResponseField>
+
+<ResponseField name="version" type="string" required>
+  API version (e.g., "v1")
+</ResponseField>
+
+## Example Request
+
+```bash
+curl https://your-domain.com/api/quarterly
+```
+
+## Example Response
+
+```json
+{
+  "summary": {
+    "copy": "Q1 2026 shows sustained expansion regime with stable interest rates. Treasury base rate averaged 4.2% with minimal volatility. Yield curve remained normalized throughout the quarter, suggesting continued accommodative conditions. Strategic initiatives can proceed with standard risk parameters.",
+    "provenance": {
+      "source": "US_TREASURY",
+      "recordDate": "2026-03-02",
+      "fetchedAt": "2026-03-03T10:30:00Z",
+      "isLive": true
+    },
+    "recordDateLabel": "March 2, 2026"
+  },
+  "copy": "Q1 2026 shows sustained expansion regime...",
+  "provenance": {
+    "source": "US_TREASURY",
+    "recordDate": "2026-03-02",
+    "fetchedAt": "2026-03-03T10:30:00Z",
+    "isLive": true
+  },
+  "recordDateLabel": "March 2, 2026",
+  "generatedAt": "2026-03-03T10:00:00Z",
+  "version": "v1"
+}
+```
+
+## Caching Behavior
+
+- **Cache Duration**: 1 hour (3600 seconds)
+- **Runtime**: Edge
+- **Revalidation**: 3600 seconds
+
+## Quarter Labels
+
+The endpoint automatically determines the quarter label from the Treasury record date:
+
+- **Q1**: January - March
+- **Q2**: April - June
+- **Q3**: July - September  
+- **Q4**: October - December
+
+The `recordDateLabel` reflects the specific data point date, while the summary `copy` references the broader quarter ("Q1 2026").
+
+## Use Cases
+
+- Quarterly business reviews (QBRs)
+- Board presentations on market conditions
+- Strategic planning cycles
+- Annual/multi-year planning context
+- Investor communications
+
+## Related Endpoints
+
+- [Monthly Summary](/api/monthly) - More granular monthly analysis
+- [Yearly Summary](/api/yearly) - Annual regime overview
+- [Cadence Alignment](/api/cadence) - Cross-timeframe consistency

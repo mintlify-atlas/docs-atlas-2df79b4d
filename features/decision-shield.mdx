@@ -1,0 +1,396 @@
+---
+title: 'Decision Shield'
+description: 'Validate strategic decisions against current market climate with plain-English verdicts'
+icon: 'shield-check'
+---
+
+## What It Does
+
+**Decision Shield** translates regime assessments into operator-safe guidance. It evaluates high-stakes decisions—hiring, roadmap changes, pricing moves—against current conditions and returns a simple verdict:
+
+<CardGroup cols={3}>
+  <Card title="SAFE" icon="circle-check" color="#16a34a">
+    Execute with normal guardrails
+  </Card>
+  <Card title="RISKY" icon="triangle-exclamation" color="#ea580c">
+    Proceed with extra scrutiny
+  </Card>
+  <Card title="DANGEROUS" icon="circle-xmark" color="#dc2626">
+    Delay or redesign the decision
+  </Card>
+</CardGroup>
+
+Every verdict includes:
+- **Sensor bullets**: Base rate, curve slope, and regime scores
+- **Guardrail**: Execution checklist tied to measurable milestones
+- **Reversal trigger**: Specific conditions to revisit the decision
+
+## Input Categories
+
+Decision Shield requires three inputs to evaluate any decision:
+
+### 1. Lifecycle Stage
+
+```typescript lib/decisionShield.ts
+export type LifecycleStage = "DISCOVERY" | "GROWTH" | "SCALE" | "MATURE";
+```
+
+<Tabs>
+  <Tab title="DISCOVERY">
+    **Early-stage, pre-product-market fit**
+    
+    - High burn sensitivity
+    - Capital-intensive actions carry extra risk
+    - Focus on survival and validation
+  </Tab>
+  <Tab title="GROWTH">
+    **Proven model, scaling distribution**
+    
+    - Balanced investment appetite
+    - Revenue expansion priority
+    - Efficiency still matters
+  </Tab>
+  <Tab title="SCALE">
+    **Multi-product, established operations**
+    
+    - Platform leverage opportunities
+    - Larger bets acceptable
+    - Portfolio optimization focus
+  </Tab>
+  <Tab title="MATURE">
+    **Dominant position, margin optimization**
+    
+    - Capital efficiency paramount
+    - M&A and restructuring common
+    - Defensive positioning
+  </Tab>
+</Tabs>
+
+### 2. Decision Category
+
+```typescript lib/decisionShield.ts
+export type DecisionCategory =
+  | "HIRING"
+  | "ROADMAP"
+  | "PRICING"
+  | "INFRASTRUCTURE"
+  | "M_AND_A"
+  | "GEOGRAPHIC_EXPANSION"
+  | "RESTRUCTURING";
+```
+
+<AccordionGroup>
+  <Accordion title="HIRING" icon="users">
+    Team expansion, new roles, contractor-to-FTE conversions
+  </Accordion>
+  <Accordion title="ROADMAP" icon="map">
+    Feature launches, platform rewrites, technical debt paydown
+  </Accordion>
+  <Accordion title="PRICING" icon="tag">
+    Discounts, packaging changes, tier restructuring
+  </Accordion>
+  <Accordion title="INFRASTRUCTURE" icon="server">
+    Cloud spend, tooling upgrades, compliance investments
+  </Accordion>
+  <Accordion title="M_AND_A" icon="handshake">
+    Acquisitions, divestitures, asset sales
+  </Accordion>
+  <Accordion title="GEOGRAPHIC_EXPANSION" icon="globe">
+    New regions, localization, international GTM
+  </Accordion>
+  <Accordion title="RESTRUCTURING" icon="diagram-project">
+    Org changes, cost reduction, operational pivots
+  </Accordion>
+</AccordionGroup>
+
+### 3. Decision Action
+
+```typescript lib/decisionShield.ts
+export type DecisionAction =
+  | "HIRE"
+  | "REWRITE"
+  | "LAUNCH"
+  | "DISCOUNT"
+  | "EXPAND"
+  | "ACQUIRE"
+  | "DIVEST"
+  | "INFRA_SPEND"
+  | "REGIONAL_EXPANSION"
+  | "RESTRUCTURE";
+```
+
+Each action maps to a specific label:
+
+```typescript lib/decisionShieldConfig.ts
+export const DECISION_ACTION_LABELS: Record<DecisionAction, string> = {
+  HIRE: "Hire",
+  REWRITE: "Rewrite",
+  LAUNCH: "Launch",
+  DISCOUNT: "Discount",
+  EXPAND: "Expand",
+  ACQUIRE: "Acquire",
+  DIVEST: "Divest",
+  INFRA_SPEND: "Infra spend",
+  REGIONAL_EXPANSION: "Regional expansion",
+  RESTRUCTURE: "Restructure",
+};
+```
+
+## Verdict Matrix
+
+Decision Shield uses a deterministic verdict matrix mapping actions to regimes:
+
+```typescript lib/decisionShieldConfig.ts
+export const DECISION_VERDICT_MATRIX: Record<
+  DecisionAction,
+  Record<RegimeKey, DecisionVerdict>
+> = {
+  HIRE: {
+    SCARCITY: "DANGEROUS",
+    DEFENSIVE: "RISKY",
+    VOLATILE: "RISKY",
+    EXPANSION: "SAFE",
+  },
+  REWRITE: {
+    SCARCITY: "DANGEROUS",
+    DEFENSIVE: "SAFE",      // Efficiency play
+    VOLATILE: "RISKY",
+    EXPANSION: "SAFE",
+  },
+  ACQUIRE: {
+    SCARCITY: "DANGEROUS",
+    DEFENSIVE: "RISKY",
+    VOLATILE: "RISKY",
+    EXPANSION: "SAFE",
+  },
+  DIVEST: {
+    SCARCITY: "SAFE",       // Preserve cash
+    DEFENSIVE: "SAFE",
+    VOLATILE: "RISKY",
+    EXPANSION: "RISKY",     // Growth mode
+  },
+  // ... (full matrix in source)
+};
+```
+
+<Note>
+  **Contextual adjustments**: Discovery-stage teams get verdict escalation for capital-intensive actions. Mature teams get de-escalation for restructuring moves.
+</Note>
+
+## Real Examples
+
+### Example 1: Hiring in SCARCITY
+
+<CodeGroup>
+```typescript Input
+const input: DecisionInput = {
+  lifecycle: "GROWTH",
+  category: "HIRING",
+  action: "HIRE",
+  context: "Expanding sales team by 5 reps",
+};
+
+const assessment = evaluateRegime(treasury); // Returns SCARCITY regime
+const output = evaluateDecision(assessment, input);
+```
+
+```typescript Output
+{
+  verdict: "DANGEROUS",
+  summary: "Execution call: Hire is dangerous for a growth team in scarcity conditions, based on current signals.",
+  bullets: [
+    "Base rate: 5.25% is above 5%, so capital is expensive.",
+    "Curve slope: inverted (-0.45%), signaling caution.",
+    "Tightness 85 vs risk appetite 35 keeps conditions in scarcity."
+  ],
+  guardrail: "Phase hiring in 30-day tranches; each cohort must show payback traction within 120 days via booked revenue or verified cost reduction.",
+  reversalTrigger: "Revisit when tightness drops below 70 and risk appetite rises above 50 for 30 consecutive days (current: 85/35)."
+}
+```
+</CodeGroup>
+
+<Warning>
+  **DANGEROUS** verdicts suggest delaying or redesigning the decision. If you must proceed, implement the guardrail checkpoints and monitor for reversal triggers.
+</Warning>
+
+### Example 2: Platform Rewrite in DEFENSIVE
+
+<CodeGroup>
+```typescript Input
+const input: DecisionInput = {
+  lifecycle: "SCALE",
+  category: "ROADMAP",
+  action: "REWRITE",
+  context: "Migrate monolith to microservices",
+};
+
+const assessment = evaluateRegime(treasury); // Returns DEFENSIVE regime
+const output = evaluateDecision(assessment, input);
+```
+
+```typescript Output
+{
+  verdict: "SAFE",
+  summary: "Execution call: Rewrite is safe for a scale team in defensive conditions, based on current signals.",
+  bullets: [
+    "Base rate: 5.10% is above 5%, so capital is expensive.",
+    "Curve slope: positive (0.85%), supporting risk taking.",
+    "Tightness 72 vs risk appetite 62 keeps conditions in defensive."
+  ],
+  guardrail: "Ship rewrite milestones every 45 days and continue only while release throughput trends at least 1.5x above baseline.",
+  reversalTrigger: "Revisit when tightness drops below 70 or risk appetite falls to or below 50 for 30 consecutive days (current: 72/62)."
+}
+```
+</CodeGroup>
+
+<Check>
+  **SAFE** verdicts mean the decision aligns with regime constraints. Execute with the provided guardrail milestones.
+</Check>
+
+### Example 3: Acquisition in EXPANSION
+
+<CodeGroup>
+```typescript Input
+const input: DecisionInput = {
+  lifecycle: "SCALE",
+  category: "M_AND_A",
+  action: "ACQUIRE",
+  context: "Acquiring complementary SaaS product",
+};
+
+const assessment = evaluateRegime(treasury); // Returns EXPANSION regime
+const output = evaluateDecision(assessment, input);
+```
+
+```typescript Output
+{
+  verdict: "SAFE",
+  summary: "Execution call: Acquire is safe for a scale team in expansion conditions, based on current signals.",
+  bullets: [
+    "Base rate: 3.80% is below 5%, so capital is moderate.",
+    "Curve slope: positive (1.20%), supporting risk taking.",
+    "Tightness 52 vs risk appetite 72 keeps conditions in expansion."
+  ],
+  guardrail: "Advance only with an integration plan that shows leading KPI lift inside 90 days and clear payback path inside 12 months at current burn.",
+  reversalTrigger: "Revisit when tightness rises above 70 or risk appetite falls to or below 50 for 30 consecutive days (current: 52/72)."
+}
+```
+</CodeGroup>
+
+<Tip>
+  EXPANSION regimes create rare windows for aggressive M&A. Still, demand integration milestones—guardrails prevent execution drift.
+</Tip>
+
+## Guardrails
+
+Every action has a pre-defined guardrail with measurable checkpoints:
+
+```typescript lib/decisionShieldConfig.ts
+export const DECISION_GUARDRAILS: Record<DecisionAction, string> = {
+  HIRE: "Phase hiring in 30-day tranches; each cohort must show payback traction within 120 days via booked revenue or verified cost reduction.",
+  
+  REWRITE: "Ship rewrite milestones every 45 days and continue only while release throughput trends at least 1.5x above baseline.",
+  
+  LAUNCH: "Launch behind staged rollouts (10%→50%→100%) and continue only while churn and ARPA stay at or above pre-launch trend over the first 60 days.",
+  
+  DISCOUNT: "Use discount windows capped at 30 days and pair each concession with annual prepay, multi-year term, or measurable expansion rights.",
+  
+  EXPAND: "Expand in waves and hold each wave unless support SLA, retention, and margin stay within 5% of baseline for two consecutive monthly reads.",
+  
+  ACQUIRE: "Advance only with an integration plan that shows leading KPI lift inside 90 days and clear payback path inside 12 months at current burn.",
+  
+  DIVEST: "Execute with signed transition owners and service continuity checkpoints every 30 days until revenue retention stabilizes.",
+  
+  INFRA_SPEND: "Release infrastructure spend in milestones and continue only when unit-cost or SLA gains are visible within the first 90 days.",
+  
+  REGIONAL_EXPANSION: "Open regions in pilot mode first; scale only after two consecutive monthly cohorts hit demand, activation, and support readiness thresholds.",
+  
+  RESTRUCTURE: "Proceed in sequenced phases and continue only while runway extends by at least one quarter without breaching delivery commitments.",
+};
+```
+
+<Info>
+  Guardrails are **execution contracts**, not suggestions. They prevent unchecked burn and ensure decisions remain reversible.
+</Info>
+
+## Copy-Ready Output
+
+Decision Shield outputs are designed for easy sharing:
+
+<Steps>
+  <Step title="Generate verdict">
+    Run `evaluateDecision(assessment, input)` to get structured output
+  </Step>
+  <Step title="Copy to clipboard">
+    Use the UI copy button or programmatically extract `output.summary`
+  </Step>
+  <Step title="Share in planning docs">
+    Paste verdict summary, bullets, and guardrail into PRDs, roadmap docs, or Slack threads
+  </Step>
+  <Step title="Set calendar reminders">
+    Parse `output.reversalTrigger` to schedule regime re-checks (30-day default)
+  </Step>
+</Steps>
+
+## Usage Example
+
+```typescript
+import { evaluateRegime } from "@/lib/regimeEngine";
+import { evaluateDecision } from "@/lib/decisionShield";
+import type { DecisionInput } from "@/lib/decisionShield";
+
+// Fetch current regime
+const treasury = await fetchTreasuryYields();
+const assessment = evaluateRegime(treasury);
+
+// Define decision
+const decision: DecisionInput = {
+  lifecycle: "GROWTH",
+  category: "HIRING",
+  action: "HIRE",
+  context: "Expanding eng team by 3 engineers",
+};
+
+// Get verdict
+const output = evaluateDecision(assessment, decision);
+
+// Log results
+console.log(`Verdict: ${output.verdict}`);
+console.log(output.summary);
+console.log("\nSensor bullets:");
+output.bullets.forEach((bullet) => console.log(`- ${bullet}`));
+console.log(`\nGuardrail: ${output.guardrail}`);
+console.log(`\nReversal trigger: ${output.reversalTrigger}`);
+
+// Share with team
+if (output.verdict === "DANGEROUS") {
+  await postToSlack({
+    channel: "#planning",
+    text: `⚠️ Decision Shield: ${output.summary}`,
+    blocks: [
+      { type: "section", text: { type: "mrkdwn", text: output.guardrail } },
+    ],
+  });
+}
+```
+
+<Warning>
+  Decision Shield reflects **current conditions only**. Re-evaluate decisions weekly or when [Signal Ops](/features/signal-ops) alerts fire.
+</Warning>
+
+## Related Features
+
+<CardGroup cols={2}>
+  <Card title="Regime Engine" icon="gauge-high" href="/features/regime-engine">
+    Understand regime classification logic
+  </Card>
+  <Card title="Signal Ops" icon="bell" href="/features/signal-ops">
+    Get alerted when regimes change
+  </Card>
+  <Card title="Time Machine" icon="clock-rotate-left" href="/features/time-machine">
+    Test decisions against historical regimes
+  </Card>
+  <Card title="Briefing Pack" icon="file-export" href="/features/briefing-pack">
+    Export verdicts for stakeholder reviews
+  </Card>
+</CardGroup>

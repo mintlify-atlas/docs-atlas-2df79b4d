@@ -1,0 +1,137 @@
+---
+title: Yearly Summary
+api: GET /api/yearly
+description: Annual market regime summary for long-term strategic planning
+---
+
+## Endpoint
+
+```
+GET /api/yearly
+```
+
+Returns an annual summary of market regime assessment, providing a long-term view of regime trends and macro conditions over a 12-month period. Ideal for annual planning and strategic reviews.
+
+## Response
+
+<ResponseField name="summary" type="object" required>
+  Complete yearly summary object
+  
+  <Expandable title="summary properties">
+    <ResponseField name="copy" type="string">
+      Human-readable narrative summary of annual regime trends
+    </ResponseField>
+    
+    <ResponseField name="provenance" type="object">
+      Data source and freshness metadata
+    </ResponseField>
+    
+    <ResponseField name="recordDateLabel" type="string">
+      Original record date label (e.g., "March 2, 2026")
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="copy" type="string" required>
+  Human-readable summary (convenience field, duplicates summary.copy)
+</ResponseField>
+
+<ResponseField name="provenance" type="object" required>
+  Data lineage information
+  
+  <Expandable title="provenance properties">
+    <ResponseField name="source" type="string">
+      Data source identifier
+    </ResponseField>
+    
+    <ResponseField name="recordDate" type="string">
+      Date of the underlying data
+    </ResponseField>
+    
+    <ResponseField name="fetchedAt" type="string">
+      When data was retrieved
+    </ResponseField>
+    
+    <ResponseField name="isLive" type="boolean">
+      Whether data is live or from fallback
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="recordDateLabel" type="string" required>
+  Original record date label (convenience field)
+</ResponseField>
+
+<ResponseField name="generatedAt" type="string" required>
+  ISO 8601 timestamp when summary was generated
+</ResponseField>
+
+<ResponseField name="version" type="string" required>
+  API version (e.g., "v1")
+</ResponseField>
+
+## Example Request
+
+```bash
+curl https://your-domain.com/api/yearly
+```
+
+## Example Response
+
+```json
+{
+  "summary": {
+    "copy": "2026 demonstrated a stable expansion regime with Treasury base rates ranging 3.8-4.5%. Yield curve remained normalized for 9 of 12 months, with brief late-cycle signals in Q3 that resolved by Q4. Overall macro environment supported sustained investment and growth initiatives. No prolonged constraint periods observed.",
+    "provenance": {
+      "source": "US_TREASURY",
+      "recordDate": "2026-03-02",
+      "fetchedAt": "2026-03-03T10:30:00Z",
+      "isLive": true
+    },
+    "recordDateLabel": "March 2, 2026"
+  },
+  "copy": "2026 demonstrated a stable expansion regime...",
+  "provenance": {
+    "source": "US_TREASURY",
+    "recordDate": "2026-03-02",
+    "fetchedAt": "2026-03-03T10:30:00Z",
+    "isLive": true
+  },
+  "recordDateLabel": "March 2, 2026",
+  "generatedAt": "2026-03-03T10:00:00Z",
+  "version": "v1"
+}
+```
+
+## Caching Behavior
+
+- **Cache Duration**: 1 hour (3600 seconds)
+- **Runtime**: Edge
+- **Revalidation**: 3600 seconds
+
+## Year Labels
+
+The endpoint automatically determines the year label from the Treasury record date. The summary `copy` references the calendar year (e.g., "2026") while `recordDateLabel` shows the specific data point date.
+
+## Use Cases
+
+- Annual strategic planning
+- Multi-year roadmap risk assessment
+- Board and investor annual reviews
+- Historical regime pattern analysis
+- Long-term budget planning
+- Retrospective analysis of macro conditions
+
+## Planning Horizons
+
+The yearly summary is particularly valuable for:
+
+- **Annual planning cycles**: Understand full-year regime stability
+- **Multi-year investments**: Assess whether macro conditions support long-term commitments
+- **Historical context**: Compare current year to prior years for pattern recognition
+
+## Related Endpoints
+
+- [Quarterly Summary](/api/quarterly) - Quarter-level granularity
+- [Monthly Summary](/api/monthly) - Month-level analysis
+- [Cadence Alignment](/api/cadence) - Cross-timeframe consistency check

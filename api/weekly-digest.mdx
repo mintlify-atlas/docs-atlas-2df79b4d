@@ -1,0 +1,123 @@
+---
+title: Weekly Digest
+api: GET /api/weekly-digest
+description: Get weekly market climate summary with change tracking
+---
+
+## Endpoint
+
+```
+GET /api/weekly-digest
+```
+
+Returns a weekly digest of market regime activity, summarizing recent alerts and their implications. The digest aggregates regime alerts from the past week to identify trends and patterns.
+
+## Response
+
+<ResponseField name="generatedAt" type="string" required>
+  ISO 8601 timestamp when the digest was generated
+</ResponseField>
+
+<ResponseField name="digest" type="object" required>
+  Processed weekly digest data
+  
+  <Expandable title="digest properties">
+    <ResponseField name="recentAlerts" type="array">
+      Alerts from the past 7 days
+    </ResponseField>
+    
+    <ResponseField name="primaryRegime" type="string">
+      Most frequently occurring regime this week
+    </ResponseField>
+    
+    <ResponseField name="regimeChanges" type="number">
+      Count of regime transitions during the week
+    </ResponseField>
+    
+    <ResponseField name="dominantReasons" type="array">
+      Most common alert reason codes this week
+    </ResponseField>
+    
+    <ResponseField name="weekOverWeekDelta" type="object">
+      Change metrics compared to previous week
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="alertCount" type="number" required>
+  Total number of regime alerts in storage
+</ResponseField>
+
+<ResponseField name="deliveryCount" type="number" required>
+  Number of alert deliveries that have been sent
+</ResponseField>
+
+## Example Request
+
+```bash
+curl https://your-domain.com/api/weekly-digest
+```
+
+## Example Response
+
+```json
+{
+  "generatedAt": "2026-03-03T10:00:00Z",
+  "digest": {
+    "recentAlerts": [
+      {
+        "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "createdAt": "2026-03-03T09:15:00Z",
+        "payload": {
+          "reason": "CURVE_INVERSION_DEEPENED",
+          "regime": "LATE_CYCLE"
+        }
+      },
+      {
+        "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+        "createdAt": "2026-02-28T14:30:00Z",
+        "payload": {
+          "reason": "BASE_RATE_THRESHOLD_CROSSED",
+          "regime": "EXPANSION"
+        }
+      }
+    ],
+    "primaryRegime": "LATE_CYCLE",
+    "regimeChanges": 2,
+    "dominantReasons": [
+      "CURVE_INVERSION_DEEPENED",
+      "BASE_RATE_THRESHOLD_CROSSED"
+    ],
+    "weekOverWeekDelta": {
+      "alertCountChange": 1,
+      "newReasons": ["CURVE_INVERSION_DEEPENED"],
+      "stabilityScore": 0.75
+    }
+  },
+  "alertCount": 47,
+  "deliveryCount": 23
+}
+```
+
+## Caching Behavior
+
+- **Runtime**: Edge
+- **Revalidation**: Dynamic (no static cache)
+- Generated on-demand from current regime alert storage
+
+## Weekly Window
+
+The digest considers alerts from the past 7 days (168 hours) from the current timestamp. This rolling window ensures the digest always reflects recent activity.
+
+## Use Cases
+
+- Weekly team briefings on market conditions
+- Regime stability monitoring
+- Trend identification across multiple alerts
+- Email/Slack digest automation
+- Dashboard summary widgets
+
+## Related Endpoints
+
+- [Regime Alerts](/api/regime-alerts) - Full alert history
+- [Monthly Summary](/api/monthly) - Longer-term regime analysis

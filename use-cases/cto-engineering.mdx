@@ -1,0 +1,237 @@
+---
+title: CTOs & Engineering Leaders
+description: Align technical roadmap, hiring decisions, and infrastructure spend to market climate
+---
+
+## Overview
+
+Whether helps CTOs and engineering leaders align technical roadmap posture, hiring decisions, and infrastructure investments to real-time market conditions. Instead of operating at fixed velocity or making platform bets in isolation, you can validate timing and scope against macro climate signals.
+
+## Roadmap posture: Growth vs efficiency
+
+Whether provides **roadmap posture toggles (growth vs. efficiency) with market climate guidance** (lib/cxoFunctionOutputs.ts:32-38):
+
+### Technical investment decisions
+
+**Supportive regimes (Risk Appetite > 60):**
+- **Platform rewrites**: Good time to tackle technical debt and architectural improvements
+- **Infrastructure expansion**: Invest in scalability ahead of growth
+- **New technology adoption**: Experiment with emerging tools and frameworks
+- **Team velocity**: Optimize for speed and market responsiveness
+
+**Neutral regimes (Risk Appetite 40-60):**
+- **Platform rewrites**: Proceed with caution, ensure clear ROI
+- **Infrastructure expansion**: Scale incrementally as demand grows
+- **New technology adoption**: Adopt proven tools only
+- **Team velocity**: Balance speed with operational stability
+
+**Tightening regimes (Risk Appetite < 40):**
+- **Platform rewrites**: Defer unless blocking customer delivery
+- **Infrastructure expansion**: Freeze, optimize existing capacity
+- **New technology adoption**: Hold, consolidate current stack
+- **Team velocity**: Optimize for reliability and cost efficiency
+
+### Roadmap prioritization framework
+
+Use Whether's regime assessment to rebalance engineering work:
+
+```
+Supportive climate:
+- 40% new features and expansion
+- 30% platform improvements
+- 20% technical debt
+- 10% maintenance and reliability
+
+Neutral climate:
+- 30% new features and expansion
+- 25% platform improvements
+- 25% technical debt
+- 20% maintenance and reliability
+
+Tightening climate:
+- 15% new features (customer-critical only)
+- 10% platform improvements (deferred)
+- 25% technical debt (efficiency-focused)
+- 50% maintenance and reliability
+```
+
+These aren't rigid rules—they're **starting points** informed by market climate that you adjust for your specific context.
+
+## Hiring decisions based on climate
+
+Get **hiring and pricing decision templates tied to live sensors** (lib/cxoFunctionOutputs.ts:36):
+
+### Engineering hiring posture
+
+**Supportive regimes:**
+- Hire ahead of demand to capture market opportunity
+- Expand teams to accelerate roadmap velocity
+- Invest in specialized roles (ML, infrastructure, security)
+- Compete aggressively for senior talent
+
+**Neutral regimes:**
+- Hire to fill critical gaps and maintain velocity
+- Balance team expansion with operational efficiency
+- Focus on generalist engineers over specialists
+- Be selective with senior hires
+
+**Tightening regimes:**
+- Hiring freeze except critical backfills
+- Optimize existing team capacity and skills
+- Defer specialized hires until conditions improve
+- Extend offer timelines to assess market stability
+
+### Compensation and retention
+
+Whether's macro signals inform compensation decisions:
+
+- **SaaS valuation multiples** (impact weight 0.84): When multiples compress, equity compensation becomes less attractive—consider cash compensation adjustments
+- **Tech layoff trends** (impact weight 0.90): Rising layoffs increase talent availability but signal market stress—adjust hiring urgency accordingly
+- **VC funding velocity** (impact weight 0.88): Slowing funding reduces competitive pressure for talent—gives you more negotiation leverage
+
+All signals are sourced from lib/macroPrioritization.ts:3-16 with explicit impact weights.
+
+## Infrastructure spend validation
+
+Get **infrastructure spend guardrails and migration timing signals** (lib/cxoFunctionOutputs.ts:37):
+
+### Cloud and infrastructure decisions
+
+**Questions Whether helps answer:**
+- Should we migrate to a new cloud provider now, or wait for better market conditions?
+- Is this the right time to expand our Kubernetes cluster, or should we optimize current capacity?
+- Can we afford to adopt a new observability platform, or should we extend our current vendor contract?
+- Should we build vs. buy for this infrastructure component?
+
+**Climate-aware guidance:**
+
+```
+Supportive regime:
+→ Green light for infrastructure modernization
+→ Invest in developer productivity tools
+→ Build custom solutions for competitive advantage
+
+Neutral regime:
+→ Proceed with planned migrations, but stage carefully
+→ Buy proven tools unless clear build advantage
+→ Balance cost with developer experience
+
+Tightening regime:
+→ Freeze infrastructure expansions
+→ Renegotiate vendor contracts
+→ Optimize cloud spend aggressively
+→ Defer custom builds, use existing tools
+```
+
+### AI and compute cost trends
+
+Whether tracks **AI compute cost trends** (impact weight 0.68 in lib/macroPrioritization.ts:12) to help you plan:
+
+- When to invest in GPU infrastructure vs. cloud AI services
+- Whether to expand ML experimentation or focus on proven models
+- How aggressively to adopt new AI capabilities
+
+As AI compute costs shift, Whether adjusts infrastructure spend guidance accordingly.
+
+## Platform rewrite timing
+
+One of the highest-stakes technical decisions: **when to rewrite a platform or core system**.
+
+Whether provides climate context to validate timing:
+
+### Green light signals (supportive regime)
+- Risk appetite > 60
+- Runway > 24 months
+- HY credit spreads < 400bps
+- VC funding velocity strong
+- Team capacity available
+
+**Implication**: Market conditions support multi-quarter technical investment with uncertain short-term ROI.
+
+### Yellow light signals (neutral regime)
+- Risk appetite 40-60
+- Runway 18-24 months
+- Credit spreads stable
+- Funding velocity moderate
+
+**Implication**: Proceed with caution. Ensure rewrite has clear customer or efficiency benefit. Stage work to preserve optionality.
+
+### Red light signals (tightening regime)
+- Risk appetite < 40
+- Runway concerns
+- Credit spreads widening
+- Funding velocity dropping
+
+**Implication**: Defer unless rewrite is blocking critical customer delivery. Focus on incremental improvements instead.
+
+## Real workflow: Technical planning
+
+```
+1. Review regime assessment
+   → Current: Tightening (Risk Appetite 35/100)
+   → Tightness: 72/100
+   → HY spreads: 485bps (+40bps)
+
+2. Adjust roadmap posture
+   → Defer platform rewrite planned for Q3
+   → Shift 2 engineers from expansion to reliability
+   → Pause new service adoption
+
+3. Update hiring plan
+   → Freeze net new headcount
+   → Approve 1 critical backfill (infrastructure lead)
+   → Extend offer timelines by 2 weeks
+
+4. Review infrastructure spend
+   → Renegotiate Datadog contract (defer upgrade)
+   → Optimize AWS spend (target 15% reduction)
+   → Hold Kubernetes expansion to Q4
+
+5. Generate engineering brief
+   → Share posture changes with team
+   → Explain market context and reversal triggers
+   → Document decision rationale for retrospective
+```
+
+## Personalized guidance by sector
+
+Whether tailors technical guidance to your sector (lib/personalizedMandates.ts:16-20):
+
+<CardGroup cols={3}>
+  <Card title="B2B SaaS" icon="briefcase">
+    **Mandate**: Anchor roadmap on retention and measurable payback
+    
+    Prioritize features that improve customer retention and reduce churn. Focus on product-led growth loops and expansion revenue.
+  </Card>
+  <Card title="Consumer" icon="users">
+    **Mandate**: Favor habit-forming loops with low-cost experimentation
+    
+    Optimize for engagement metrics and viral growth. Use A/B testing and fast iteration to find product-market fit efficiently.
+  </Card>
+  <Card title="Infrastructure" icon="server">
+    **Mandate**: Emphasize reliability, migration safety, and platform trust
+    
+    Prioritize uptime, backwards compatibility, and smooth upgrade paths. Build customer confidence through operational excellence.
+  </Card>
+</CardGroup>
+
+## Related features
+
+<CardGroup cols={2}>
+  <Card title="Regime Detection" href="/features/regime-engine">
+    Understand how Whether identifies market climates
+  </Card>
+  <Card title="Macro Signals" href="/data/macro-indicators">
+    See the data sources behind technical guidance
+  </Card>
+  <Card title="Decision Shield" href="/features/decision-shield">
+    Pressure-test platform bets against downside scenarios
+  </Card>
+  <Card title="Product Leaders" href="/use-cases/product-leaders">
+    See how product teams use Whether for roadmap planning
+  </Card>
+</CardGroup>
+
+## Key takeaway
+
+Whether doesn't tell you what to build—it helps you **validate timing and scope** for major technical investments by providing market climate context. This reduces the risk of starting expensive platform work right before market conditions force a pivot to efficiency mode.

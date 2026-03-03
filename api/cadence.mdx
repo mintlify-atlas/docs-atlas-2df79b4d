@@ -1,0 +1,175 @@
+---
+title: Cadence Alignment
+api: GET /api/cadence
+description: Cross-timeframe regime alignment validation
+---
+
+## Endpoint
+
+```
+GET /api/cadence
+```
+
+Returns alignment analysis between weekly and monthly regime summaries, helping identify discrepancies in regime classification across different time horizons. This is a validation endpoint to ensure consistency in regime signals.
+
+## Response
+
+<ResponseField name="weeklySummary" type="object" required>
+  Complete weekly summary object (same structure as weekly endpoint)
+</ResponseField>
+
+<ResponseField name="monthlySummary" type="object" required>
+  Complete monthly summary object (same structure as monthly endpoint)
+</ResponseField>
+
+<ResponseField name="alignmentStatus" type="string" required>
+  Alignment status indicator
+  
+  Possible values:
+  - `"ALIGNED"` - Weekly and monthly assessments are consistent
+  - `"MISALIGNED"` - Discrepancies detected between timeframes
+  - `"DIVERGENT"` - Significant contradiction in regime signals
+</ResponseField>
+
+<ResponseField name="mismatchedConstraints" type="array" required>
+  Array of constraint mismatches between weekly and monthly summaries
+  
+  <Expandable title="mismatch properties">
+    <ResponseField name="constraint" type="string">
+      Name of the mismatched constraint
+    </ResponseField>
+    
+    <ResponseField name="weeklyValue" type="any">
+      Value in weekly summary
+    </ResponseField>
+    
+    <ResponseField name="monthlyValue" type="any">
+      Value in monthly summary
+    </ResponseField>
+    
+    <ResponseField name="severity" type="string">
+      Impact level: "LOW", "MEDIUM", "HIGH"
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="generatedAt" type="string" required>
+  ISO 8601 timestamp when analysis was generated
+</ResponseField>
+
+<ResponseField name="version" type="string" required>
+  API version (e.g., "v1")
+</ResponseField>
+
+## Example Request
+
+```bash
+curl https://your-domain.com/api/cadence
+```
+
+## Example Response (Aligned)
+
+```json
+{
+  "weeklySummary": {
+    "copy": "This week shows expansion regime with base rate at 4.15%...",
+    "structured": {
+      "regime": "EXPANSION",
+      "constraints": ["NONE"]
+    }
+  },
+  "monthlySummary": {
+    "copy": "March 2026 demonstrates expansion characteristics...",
+    "structured": {
+      "regime": "EXPANSION",
+      "constraints": ["NONE"]
+    }
+  },
+  "alignmentStatus": "ALIGNED",
+  "mismatchedConstraints": [],
+  "generatedAt": "2026-03-03T10:00:00Z",
+  "version": "v1"
+}
+```
+
+## Example Response (Misaligned)
+
+```json
+{
+  "weeklySummary": {
+    "copy": "This week shows late-cycle signals...",
+    "structured": {
+      "regime": "LATE_CYCLE",
+      "constraints": ["DEFER_MAJOR_CAPEX"]
+    }
+  },
+  "monthlySummary": {
+    "copy": "March 2026 demonstrates expansion characteristics...",
+    "structured": {
+      "regime": "EXPANSION",
+      "constraints": ["NONE"]
+    }
+  },
+  "alignmentStatus": "MISALIGNED",
+  "mismatchedConstraints": [
+    {
+      "constraint": "regime_classification",
+      "weeklyValue": "LATE_CYCLE",
+      "monthlyValue": "EXPANSION",
+      "severity": "HIGH"
+    },
+    {
+      "constraint": "capex_guidance",
+      "weeklyValue": "DEFER_MAJOR_CAPEX",
+      "monthlyValue": "PROCEED_NORMAL",
+      "severity": "MEDIUM"
+    }
+  ],
+  "generatedAt": "2026-03-03T10:00:00Z",
+  "version": "v1"
+}
+```
+
+## Caching Behavior
+
+- **Cache Duration**: 1 hour (3600 seconds)
+- **Runtime**: Edge
+- **Revalidation**: 3600 seconds
+
+## Alignment Logic
+
+The endpoint compares:
+
+1. **Regime classification** - Do weekly and monthly agree on regime type?
+2. **Constraint recommendations** - Are operational constraints consistent?
+3. **Signal direction** - Are trends pointing the same way?
+
+## Interpreting Alignment Status
+
+### ALIGNED
+Weekly and monthly summaries are consistent. Regime signals are stable across timeframes. Safe to act on recommendations.
+
+### MISALIGNED
+Minor discrepancies detected. Common during regime transitions. Review `mismatchedConstraints` for specifics. Consider waiting for next update before major decisions.
+
+### DIVERGENT
+Significant contradictions between timeframes. May indicate:
+- Rapid regime transition in progress
+- Data quality issues
+- Unusual market volatility
+
+Recommend investigation before acting on either signal.
+
+## Use Cases
+
+- **Validation**: Sanity-check regime signals before major decisions
+- **Transition detection**: Identify when regime is actively shifting
+- **Data quality**: Spot potential issues in source data
+- **Decision confidence**: Higher confidence when aligned, caution when misaligned
+- **Monitoring dashboards**: Track alignment over time
+
+## Related Endpoints
+
+- [Weekly Digest](/api/weekly-digest) - Weekly regime summary
+- [Monthly Summary](/api/monthly) - Monthly regime assessment
+- [Regime Alerts](/api/regime-alerts) - Specific regime change events

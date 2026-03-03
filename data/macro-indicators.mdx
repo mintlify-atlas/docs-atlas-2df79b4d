@@ -1,0 +1,373 @@
+---
+title: Macro Indicators
+description: Additional economic signals that adjust Whether's regime scores
+---
+
+## Overview
+
+Beyond Treasury yields, Whether ingests macro indicators to refine regime classification. These signals adjust the **tightness** and **risk appetite** scores when markets show stress beyond what the yield curve captures.
+
+## Data Sources
+
+### Bureau of Labor Statistics (BLS)
+
+<ParamField path="CPI_YOY" type="object">
+  **Series ID**: `CUUR0000SA0`
+  
+  **Endpoint**: `https://api.bls.gov/publicAPI/v2/timeseries/data/`
+  
+  **Calculation**: Year-over-year percent change
+  
+  **Usage**: Inflation pressure signal
+</ParamField>
+
+<ParamField path="UNEMPLOYMENT_RATE" type="object">
+  **Series ID**: `LNS14000000`
+  
+  **Endpoint**: `https://api.bls.gov/publicAPI/v2/timeseries/data/`
+  
+  **Calculation**: Latest monthly value
+  
+  **Usage**: Labor market health signal
+</ParamField>
+
+### Federal Reserve Economic Data (FRED)
+
+<ParamField path="BBB_CREDIT_SPREAD" type="object">
+  **Series ID**: `BAA10Y`
+  
+  **Endpoint**: `https://fred.stlouisfed.org/series/BAA10Y`
+  
+  **Description**: Moody's Baa Corporate Bond Yield relative to 10-Year Treasury
+  
+  **Usage**: Investment-grade credit stress signal
+</ParamField>
+
+<ParamField path="HY_CREDIT_SPREAD" type="object">
+  **Series ID**: `BAMLH0A0HYM2`
+  
+  **Endpoint**: `https://fred.stlouisfed.org/series/BAMLH0A0HYM2`
+  
+  **Description**: ICE BofA US High Yield Option-Adjusted Spread
+  
+  **Usage**: Junk bond stress signal; triggers tightness adjustments when ≥4.5%
+</ParamField>
+
+<ParamField path="CHICAGO_FCI" type="object">
+  **Series ID**: `NFCI`
+  
+  **Endpoint**: `https://fred.stlouisfed.org/series/NFCI`
+  
+  **Description**: Chicago Fed National Financial Conditions Index
+  
+  **Usage**: Broad financial tightening signal; positive values add to tightness
+</ParamField>
+
+<ParamField path="VIX_INDEX" type="object">
+  **Series ID**: `VIXCLS`
+  
+  **Endpoint**: `https://fred.stlouisfed.org/series/VIXCLS`
+  
+  **Description**: CBOE Volatility Index (closing value)
+  
+  **Usage**: Equity market fear gauge; reduces risk appetite when ≥20
+</ParamField>
+
+## How Indicators Adjust Scores
+
+### Tightness Adjustments
+
+Macro indicators can **increase** the tightness score when stress is detected:
+
+#### High-Yield Credit Spread
+
+```typescript
+// From lib/regimeEngine.ts:356
+const HY_SPREAD_STRESS_THRESHOLD = 4.5;
+const HY_SPREAD_TIGHTNESS_MULTIPLIER = 6;
+const HY_SPREAD_TIGHTNESS_CAP = 15;
+
+if (hySpread >= HY_SPREAD_STRESS_THRESHOLD) {
+  adjustedTightness += Math.min(
+    HY_SPREAD_TIGHTNESS_CAP,
+    Math.round((hySpread - HY_SPREAD_STRESS_THRESHOLD) * HY_SPREAD_TIGHTNESS_MULTIPLIER)
+  );
+  contributors.push('HY OAS stress');
+}
+```
+
+**Example**: If high-yield spreads are 5.5%, this adds `(5.5 - 4.5) * 6 = 6` points to tightness (capped at 15).
+
+#### Chicago Financial Conditions Index
+
+```typescript
+// From lib/regimeEngine.ts:371
+const CHICAGO_FCI_TIGHTENING_THRESHOLD = 0;
+const CHICAGO_FCI_TIGHTNESS_MULTIPLIER = 10;
+const CHICAGO_FCI_TIGHTNESS_CAP = 10;
+
+if (chicagoFci >= CHICAGO_FCI_TIGHTENING_THRESHOLD) {
+  adjustedTightness += Math.min(
+    CHICAGO_FCI_TIGHTNESS_CAP,
+    Math.round(chicagoFci * CHICAGO_FCI_TIGHTNESS_MULTIPLIER)
+  );
+  contributors.push('Financial conditions tightening');
+}
+```
+
+**Example**: If NFCI is 0.5, this adds `0.5 * 10 = 5` points to tightness (capped at 10).
+
+### Risk Appetite Adjustments
+
+Macro indicators can **reduce** risk appetite when investor caution spikes:
+
+#### VIX Index
+
+```typescript
+// From lib/regimeEngine.ts:386
+const VIX_SHOCK_THRESHOLD = 20;
+const VIX_RISK_APPETITE_MULTIPLIER = 1.5;
+const VIX_RISK_APPETITE_CAP = 20;
+
+if (vix >= VIX_SHOCK_THRESHOLD) {
+  adjustedRiskAppetite -= Math.min(
+    VIX_RISK_APPETITE_CAP,
+    Math.round((vix - VIX_SHOCK_THRESHOLD) * VIX_RISK_APPETITE_MULTIPLIER)
+  );
+  contributors.push('Equity volatility shock');
+}
+```
+
+**Example**: If VIX is 30, this subtracts `(30 - 20) * 1.5 = 15` points from risk appetite (capped at -20).
+
+#### VC Funding Velocity
+
+```typescript
+// From lib/regimeEngine.ts:401
+const VC_VELOCITY_SLOWDOWN_THRESHOLD = -5;
+const VC_VELOCITY_RISK_APPETITE_MULTIPLIER = 1.5;
+const VC_VELOCITY_RISK_APPETITE_CAP = 10;
+
+if (vcVelocity <= VC_VELOCITY_SLOWDOWN_THRESHOLD) {
+  adjustedRiskAppetite -= Math.min(
+    VC_VELOCITY_RISK_APPETITE_CAP,
+    Math.round(
+      Math.abs(vcVelocity - VC_VELOCITY_SLOWDOWN_THRESHOLD) *
+        VC_VELOCITY_RISK_APPETITE_MULTIPLIER
+    )
+  );
+  contributors.push('VC funding slowdown');
+}
+```
+
+**Example**: If VC velocity is -8%, this subtracts `abs(-8 - (-5)) * 1.5 = 4.5` points (rounded to 5, capped at 10).
+
+#### Tech Layoff Trend
+
+```typescript
+// From lib/regimeEngine.ts:419
+const LAYOFF_PRESSURE_THRESHOLD = 65;
+const LAYOFF_RISK_APPETITE_MULTIPLIER = 0.6;
+const LAYOFF_RISK_APPETITE_CAP = 12;
+
+if (layoffs >= LAYOFF_PRESSURE_THRESHOLD) {
+  adjustedRiskAppetite -= Math.min(
+    LAYOFF_RISK_APPETITE_CAP,
+    Math.round((layoffs - LAYOFF_PRESSURE_THRESHOLD) * LAYOFF_RISK_APPETITE_MULTIPLIER)
+  );
+  contributors.push('Tech layoff pressure');
+}
+```
+
+**Example**: If layoff index is 75, this subtracts `(75 - 65) * 0.6 = 6` points from risk appetite (capped at -12).
+
+## Policy Assessment Scoring
+
+Whether uses a subset of macro indicators for its **Policy Spec v1** scoring system:
+
+### Composite Tightness Score (CTS)
+
+Combines base rate and BBB credit spread:
+
+```typescript
+// From lib/regimeEngine.ts:508
+const cts = computeCompositeScore(
+  baseRateZ ?? 0,
+  POLICY_SPEC_V1.weights.baseRate,
+  bbbZ ?? 0,
+  POLICY_SPEC_V1.weights.bbbSpread
+);
+```
+
+**Weights**:
+- Base rate: 0.7
+- BBB credit spread: 0.3
+
+### Composite Risk Appetite Score (RAS)
+
+Combines curve slope and BBB credit spread:
+
+```typescript
+// From lib/regimeEngine.ts:509
+const ras = computeCompositeScore(
+  slopeZ ?? 0,
+  POLICY_SPEC_V1.weights.curveSlope,
+  bbbZ ?? 0,
+  POLICY_BBB_WEIGHT_FOR_RAS
+);
+```
+
+**Weights**:
+- Curve slope: 0.6
+- BBB credit spread: 0.4 (inverted)
+
+### Z-Score Normalization
+
+All signals are normalized to z-scores before weighting:
+
+```typescript
+// From lib/regimeEngine.ts:493
+const stats = computeRollingStats(value, history, fallbackMean);
+const z = computeZScore(value, stats);
+const directionalZ = directionalNormalize(z, direction);
+const clippedZ = clipZScore(directionalZ, POLICY_SPEC_V1.zClip); // ±3 clip
+```
+
+**Direction logic**:
+- `"HIGHER_IS_TIGHTER"`: Positive z-score indicates tightening (e.g., base rate, BBB spread, CPI, unemployment)
+- `"HIGHER_IS_LOOSER"`: Positive z-score indicates loosening (e.g., curve slope)
+
+## Fetching and Caching
+
+### BLS API
+
+Whether fetches BLS data via POST request:
+
+```typescript
+// From lib/macroSnapshot.ts:68
+const response = await fetch('https://api.bls.gov/publicAPI/v2/timeseries/data/', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  next: { revalidate: 900 }, // 15 minutes
+  body: JSON.stringify({ seriesid: [seriesId], latest: true }),
+});
+```
+
+**Revalidate interval**: 900 seconds (15 minutes)
+
+### FRED CSV
+
+Whether fetches FRED data via CSV endpoint:
+
+```typescript
+// From lib/macroSnapshot.ts:41
+const response = await fetch(
+  `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(seriesId)}`,
+  { next: { revalidate: 900 } }
+);
+```
+
+**Revalidate interval**: 900 seconds (15 minutes)
+
+### Fallback to Snapshot
+
+If any live fetch fails, Whether falls back to `data/macro_snapshot.json`:
+
+```typescript
+// From lib/macroSnapshot.ts:214
+export const loadMacroSeries = async (fetcher: typeof fetch = fetch): Promise<MacroSeriesReading[]> => {
+  try {
+    return await buildLiveSeries(fetcher);
+  } catch {
+    return snapshotSeries; // Pre-loaded from macro_snapshot.json
+  }
+};
+```
+
+Snapshot data includes `isLive: false` and displays an "OFFLINE" badge in the UI.
+
+## Response Structure
+
+<ResponseField name="id" type="MacroSeriesId">
+  Enum: `CPI_YOY | UNEMPLOYMENT_RATE | BBB_CREDIT_SPREAD | HY_CREDIT_SPREAD | CHICAGO_FCI | VIX_INDEX | ...`
+</ResponseField>
+
+<ResponseField name="label" type="string">
+  Human-readable name (e.g., "CPI Year-over-Year")
+</ResponseField>
+
+<ResponseField name="value" type="number | null">
+  Latest value in the series
+</ResponseField>
+
+<ResponseField name="unit" type="string">
+  Enum: `% | bps | x | index`
+</ResponseField>
+
+<ResponseField name="explanation" type="string">
+  Plain-English description of what the indicator measures
+</ResponseField>
+
+<ResponseField name="sourceLabel" type="string">
+  Source attribution (e.g., "BLS public API", "FRED")
+</ResponseField>
+
+<ResponseField name="sourceUrl" type="string">
+  Link to the original data source
+</ResponseField>
+
+<ResponseField name="formulaUrl" type="string">
+  Link to documentation explaining the calculation
+</ResponseField>
+
+<ResponseField name="record_date" type="string">
+  ISO date of the data point
+</ResponseField>
+
+<ResponseField name="fetched_at" type="string">
+  ISO timestamp when Whether fetched the data
+</ResponseField>
+
+<ResponseField name="isLive" type="boolean">
+  `true` if fetched from live API; `false` if using snapshot
+</ResponseField>
+
+<ResponseField name="history" type="SeriesHistoryPoint[]" optional>
+  Array of `{ date: string, value: number | null }` for time-series charts
+</ResponseField>
+
+## Boundary Contributors
+
+When macro adjustments push scores across regime boundaries, Whether tracks the contributors:
+
+```typescript
+// From lib/regimeEngine.ts:434
+return {
+  tightness: adjustedTightness,
+  riskAppetite: adjustedRiskAppetite,
+  boundaryContributors: contributors, // e.g., ['HY OAS stress', 'Equity volatility shock']
+  weakReadCount,
+};
+```
+
+This list appears in the regime diagnostics panel to explain why the classification may be more severe than the yield curve alone suggests.
+
+## Weak Read Warnings
+
+Whether counts how many macro adjustments are active:
+
+```typescript
+// From lib/regimeEngine.ts:142
+const TWO_WEAK_READS_WARNING_COUNT = 2;
+
+// In diagnostics:
+twoWeakReadsWarning: weakReadCount >= TWO_WEAK_READS_WARNING_COUNT,
+```
+
+When **two or more** macro stress signals fire simultaneously, Whether displays a warning that conditions are deteriorating beyond normal yield curve patterns.
+
+## Related
+
+- [Treasury Yields](/data/treasury-yields) - Core yield curve data
+- [Data Provenance](/data/provenance) - Freshness and audit trails
+- [Regime Scoring](/concepts/regime-scoring) - How all signals combine into regime classification

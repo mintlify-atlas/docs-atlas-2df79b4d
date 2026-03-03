@@ -1,0 +1,173 @@
+---
+title: Monthly Summary
+api: GET /api/monthly
+description: Monthly market regime summary with operational guidance
+---
+
+## Endpoint
+
+```
+GET /api/monthly
+```
+
+Returns a comprehensive monthly summary of market regime assessment, including structured data for product/engineering planning and natural language copy for team communication.
+
+## Response
+
+<ResponseField name="summary" type="object" required>
+  Complete monthly summary object
+  
+  <Expandable title="summary properties">
+    <ResponseField name="copy" type="string">
+      Human-readable narrative summary of the market regime
+    </ResponseField>
+    
+    <ResponseField name="structured" type="object">
+      Structured data representation for programmatic use
+    </ResponseField>
+    
+    <ResponseField name="provenance" type="object">
+      Data source and freshness metadata
+    </ResponseField>
+    
+    <ResponseField name="recordDateLabel" type="string">
+      Formatted date label (e.g., "March 2026")
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="copy" type="string" required>
+  Human-readable summary (convenience field, duplicates summary.copy)
+</ResponseField>
+
+<ResponseField name="structured" type="object" required>
+  Structured assessment data (convenience field)
+</ResponseField>
+
+<ResponseField name="provenance" type="object" required>
+  Data lineage information (convenience field)
+</ResponseField>
+
+<ResponseField name="recordDateLabel" type="string" required>
+  Period label (convenience field)
+</ResponseField>
+
+<ResponseField name="agentHandoff" type="object" required>
+  Data formatted for AI agent consumption
+  
+  <Expandable title="agentHandoff properties">
+    <ResponseField name="payload" type="object">
+      Complete data payload including assessment, Treasury yields, sensors, and macro series
+    </ResponseField>
+    
+    <ResponseField name="prompt" type="string">
+      Pre-formatted prompt for LLM analysis
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="summaryHash" type="string" required>
+  Hash of the summary content for change detection
+</ResponseField>
+
+<ResponseField name="generatedAt" type="string" required>
+  ISO 8601 timestamp when summary was generated
+</ResponseField>
+
+<ResponseField name="version" type="string" required>
+  API version (e.g., "v1")
+</ResponseField>
+
+## Example Request
+
+```bash
+curl https://your-domain.com/api/monthly
+```
+
+## Example Response
+
+```json
+{
+  "summary": {
+    "copy": "Market regime shows expansion characteristics with stable Treasury yields. Base rate at 4.15% suggests accommodative conditions. Yield curve normalized with 2Y-10Y spread at +10bps. Recommend normal project velocity and standard vendor commitments.",
+    "structured": {
+      "regime": "EXPANSION",
+      "baseRate": 4.15,
+      "curveSlope": 10,
+      "constraints": ["NONE"],
+      "recommendations": [
+        "Maintain normal hiring pace",
+        "Proceed with multi-quarter infrastructure investments",
+        "Standard vendor contract terms acceptable"
+      ]
+    },
+    "provenance": {
+      "source": "US_TREASURY",
+      "recordDate": "2026-03-02",
+      "fetchedAt": "2026-03-03T10:30:00Z",
+      "isLive": true
+    },
+    "recordDateLabel": "March 2026"
+  },
+  "copy": "Market regime shows expansion characteristics...",
+  "structured": {
+    "regime": "EXPANSION",
+    "baseRate": 4.15,
+    "curveSlope": 10
+  },
+  "provenance": {
+    "source": "US_TREASURY",
+    "recordDate": "2026-03-02"
+  },
+  "recordDateLabel": "March 2026",
+  "agentHandoff": {
+    "payload": {
+      "assessment": { /* full assessment data */ },
+      "treasury": { /* yield curve data */ },
+      "sensors": [ /* sensor readings */ ],
+      "macroSeries": [ /* macro indicators */ ]
+    },
+    "prompt": "Based on the following market regime data..."
+  },
+  "summaryHash": "a1b2c3d4e5f6",
+  "generatedAt": "2026-03-03T10:00:00Z",
+  "version": "v1"
+}
+```
+
+## Caching Behavior
+
+- **Cache Duration**: 1 hour (3600 seconds)
+- **Runtime**: Edge
+- **Revalidation**: 3600 seconds
+
+## Agent Handoff
+
+The `agentHandoff` field is specifically designed for AI agents and LLM integrations:
+
+- **payload**: Complete structured data for analysis
+- **prompt**: Ready-to-use prompt template for regime interpretation
+
+This enables seamless integration with Claude, GPT-4, or other LLMs for custom regime analysis.
+
+## Summary Hash
+
+The `summaryHash` field provides a content fingerprint useful for:
+
+- Change detection (has the regime assessment changed?)
+- Cache invalidation in downstream systems
+- Deduplication in notification systems
+
+## Use Cases
+
+- Monthly planning meeting briefings
+- Product roadmap risk assessment
+- Budget planning constraint identification
+- AI agent integration for custom analysis
+- Automated reporting pipelines
+
+## Related Endpoints
+
+- [Quarterly Summary](/api/quarterly) - Quarterly regime trends
+- [Yearly Summary](/api/yearly) - Annual regime analysis
+- [Cadence Alignment](/api/cadence) - Cross-timeframe consistency check

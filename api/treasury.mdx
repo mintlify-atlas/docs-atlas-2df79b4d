@@ -1,0 +1,101 @@
+---
+title: Treasury Data
+api: GET /api/treasury
+description: Fetch current U.S. Treasury yield curve data
+---
+
+## Endpoint
+
+```
+GET /api/treasury
+```
+
+Returns the current U.S. Treasury yield curve with yields across multiple maturities. Data is cached for 24 hours and includes fallback mechanisms for when live data is unavailable.
+
+## Response
+
+<ResponseField name="yields" type="object" required>
+  Treasury yields across different maturities
+  
+  <Expandable title="yields properties">
+    <ResponseField name="oneMonth" type="number | null">
+      1-month Treasury yield (percentage)
+    </ResponseField>
+    
+    <ResponseField name="threeMonth" type="number | null">
+      3-month Treasury yield (percentage)
+    </ResponseField>
+    
+    <ResponseField name="twoYear" type="number | null">
+      2-year Treasury yield (percentage)
+    </ResponseField>
+    
+    <ResponseField name="tenYear" type="number | null">
+      10-year Treasury yield (percentage)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="source" type="string" required>
+  Data source identifier (typically "US_TREASURY")
+</ResponseField>
+
+<ResponseField name="record_date" type="string" required>
+  ISO 8601 date of the Treasury data observation
+</ResponseField>
+
+<ResponseField name="fetched_at" type="string" required>
+  ISO 8601 timestamp when data was retrieved
+</ResponseField>
+
+<ResponseField name="isLive" type="boolean" required>
+  Whether data is live (true) or from fallback snapshot (false)
+</ResponseField>
+
+<ResponseField name="fallback_at" type="string | null">
+  ISO 8601 timestamp when fallback data was used (null if live)
+</ResponseField>
+
+<ResponseField name="fallback_reason" type="string | null">
+  Explanation for why fallback data was used (null if live)
+</ResponseField>
+
+## Example Request
+
+```bash
+curl https://your-domain.com/api/treasury
+```
+
+## Example Response
+
+```json
+{
+  "yields": {
+    "oneMonth": 4.25,
+    "threeMonth": 4.35,
+    "twoYear": 4.15,
+    "tenYear": 4.05
+  },
+  "source": "US_TREASURY",
+  "record_date": "2026-03-02",
+  "fetched_at": "2026-03-03T10:30:00Z",
+  "isLive": true,
+  "fallback_at": null,
+  "fallback_reason": null
+}
+```
+
+## Caching Behavior
+
+- **Cache Duration**: 24 hours (86400 seconds)
+- **Runtime**: Edge
+- **Revalidation**: Dynamic (force-dynamic) to ensure fresh data within cache window
+
+The endpoint uses a snapshot fallback mechanism when live Treasury data is unavailable. The `isLive` field indicates whether you're receiving current data or cached fallback values.
+
+## Use Cases
+
+- Real-time yield curve monitoring
+- Interest rate spread calculations (e.g., 2Y-10Y slope)
+- Base rate input for regime classification
+- Historical yield tracking and analysis

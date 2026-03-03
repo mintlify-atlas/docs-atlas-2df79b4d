@@ -1,0 +1,88 @@
+---
+title: API Overview
+description: Whether API endpoints for market regime data and Treasury yield curves
+---
+
+## Introduction
+
+The Whether API provides programmatic access to market regime assessments, Treasury yield data, and regime change alerts. All endpoints return JSON responses with consistent metadata fields.
+
+## Base URL
+
+```
+https://your-domain.com/api
+```
+
+## Authentication
+
+Currently, the API endpoints are publicly accessible and do not require authentication.
+
+## Response Format
+
+All API responses follow a consistent JSON structure with standard metadata fields:
+
+<ResponseField name="generatedAt" type="string">
+  ISO 8601 timestamp indicating when the response was generated
+</ResponseField>
+
+<ResponseField name="version" type="string">
+  API version identifier (e.g., "v1")
+</ResponseField>
+
+### Common Data Fields
+
+Many endpoints return data with these shared metadata fields:
+
+<ResponseField name="source" type="string">
+  Data source identifier (e.g., "US_TREASURY", "FRED")
+</ResponseField>
+
+<ResponseField name="record_date" type="string">
+  ISO 8601 date of the actual data observation
+</ResponseField>
+
+<ResponseField name="fetched_at" type="string">
+  ISO 8601 timestamp when the data was retrieved
+</ResponseField>
+
+<ResponseField name="isLive" type="boolean">
+  Whether the data represents live/current values or fallback data
+</ResponseField>
+
+## Caching
+
+Endpoints implement edge caching with different revalidation periods:
+
+- `/api/treasury`: 24 hours (86400 seconds)
+- `/api/monthly`, `/api/quarterly`, `/api/yearly`, `/api/cadence`: 1 hour (3600 seconds)
+- `/api/regime-alerts`, `/api/weekly-digest`: Dynamic (no static cache)
+
+## Error Handling
+
+API errors return standard HTTP status codes:
+
+- `200 OK`: Successful request
+- `400 Bad Request`: Invalid parameters
+- `500 Internal Server Error`: Server-side error
+
+Error responses include a descriptive message:
+
+```json
+{
+  "error": "Description of what went wrong"
+}
+```
+
+## Rate Limiting
+
+Currently, there are no enforced rate limits on API endpoints. However, please be respectful with request frequency as endpoints are cached appropriately.
+
+## Available Endpoints
+
+- [Treasury Data](/api/treasury) - Current Treasury yield curve
+- [Regime Alerts](/api/regime-alerts) - Market regime change alerts
+- [Weekly Digest](/api/weekly-digest) - Weekly regime summary
+- [Monthly Summary](/api/monthly) - Monthly regime analysis
+- [Quarterly Summary](/api/quarterly) - Quarterly regime analysis  
+- [Yearly Summary](/api/yearly) - Yearly regime analysis
+- [Cadence Alignment](/api/cadence) - Cross-timeframe alignment check

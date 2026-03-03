@@ -1,0 +1,160 @@
+---
+title: CFOs & Finance Teams
+description: Translate market regimes into runway guidance, budget planning, and capital efficiency guardrails
+---
+
+## Overview
+
+Whether helps CFOs and finance teams translate market climate signals into concrete capital posture and runway constraints. Instead of reacting to funding shocks or operating with outdated assumptions, you can align budget planning and burn rate guidance to real-time Treasury signals and credit market conditions.
+
+## Capital posture and runway constraints
+
+Whether converts market regimes into financial planning guardrails:
+
+### Runway and burn guidance
+
+Get **runway, burn, and capital efficiency guardrails sourced to Treasury signals**:
+
+**In supportive regimes (Risk Appetite > 60):**
+- Acceptable burn: Higher growth investment tolerated
+- Runway target: 12-18 months minimum
+- Capital efficiency: Focus on growth metrics over unit economics
+
+**In neutral regimes (Risk Appetite 40-60):**
+- Acceptable burn: Balanced growth and efficiency
+- Runway target: 18-24 months recommended
+- Capital efficiency: Monitor payback periods closely
+
+**In tightening regimes (Risk Appetite < 40):**
+- Acceptable burn: Prioritize path to profitability
+- Runway target: 24+ months required
+- Capital efficiency: Strict unit economics enforcement
+
+All guidance is **citation-ready** with source timestamps from Treasury data, credit spreads, and funding velocity metrics.
+
+### Budget planning with macro posture
+
+Create **budget planning exports with market climate narrative** for board meetings:
+
+```
+Q3 2026 Budget Guidance
+
+Current regime: Tightening (Risk Appetite 35/100)
+Source: 10Y-2Y Treasury spread inverted -28bps,
+        HY credit spreads widened to 485bps
+Data freshness: Updated 2026-03-02
+
+Recommended posture:
+- Extend runway from 18mo → 24mo
+- Reduce burn rate 25% this quarter
+- Defer discretionary infrastructure spend
+- Hold vendor negotiations until Q4
+
+Reversal triggers:
+- Treasury spread steepens above +20bps
+- HY spreads compress below 400bps
+- VC funding velocity recovers 30%+
+```
+
+This gives you **board-ready narratives** with explicit sources and freshness indicators.
+
+### Capital availability watchlist
+
+Monitor **capital availability with reversal triggers and risk flags**:
+
+- **Credit spread thresholds**: Get alerts when HY or BBB spreads cross your risk tolerance
+- **Funding velocity tracking**: Track VC funding trends for your stage and sector
+- **Valuation multiple shifts**: Monitor SaaS multiples to inform raise timing
+- **Reversal signals**: Know when conditions improve enough to resume growth investment
+
+Whether's macro prioritization engine (lib/macroPrioritization.ts:4-16) ranks signals by impact weight:
+- HY Credit Spread: 1.0 (highest impact)
+- VIX Index: 0.98
+- Chicago FCI: 0.96
+- BBB Credit Spread: 0.94
+- VC Funding Velocity: 0.88
+- SaaS Valuation Multiple: 0.84
+
+This helps you focus on the signals that matter most for capital planning.
+
+## Real constraints from Whether's engine
+
+Whether's CXO output catalog (lib/cxoFunctionOutputs.ts:14-20) provides finance teams with:
+
+1. **Runway, burn, and capital efficiency guardrails** sourced to Treasury signals
+2. **Budget planning export** with market climate narrative and citation-ready sources
+3. **Capital availability watchlist** with reversal triggers and risk flags
+
+These outputs are designed to integrate directly into your FP&A workflow and board decks.
+
+## Personalized guidance by company stage
+
+Whether tailors financial guidance to your stage (lib/personalizedMandates.ts:9-14):
+
+<CardGroup cols={2}>
+  <Card title="Seed Stage" icon="seedling">
+    **Mandate**: Protect runway while preserving discovery velocity
+    
+    Focus on extending runway to 24+ months without killing product experimentation. Bias toward proven channels over broad expansion.
+  </Card>
+  <Card title="Series A" icon="chart-line">
+    **Mandate**: Prioritize repeatable GTM learning over broad expansion
+    
+    Invest in proving unit economics before scaling. Tighten payback period tracking and customer acquisition efficiency.
+  </Card>
+  <Card title="Growth Stage" icon="rocket">
+    **Mandate**: Scale proven loops while tightening operational discipline
+    
+    Balance growth investment with margin improvement. Codify spend guardrails across teams to prevent burn rate surprises.
+  </Card>
+  <Card title="Public Company" icon="building">
+    **Mandate**: Bias toward predictability and cross-functional execution reliability
+    
+    Emphasize guidance consistency and operational leverage. Use Whether's regime tracking to explain posture shifts to analysts.
+  </Card>
+</CardGroup>
+
+## Example workflow: Board prep
+
+```
+1. Review current regime assessment
+   → Regime: Tightening
+   → Tightness: 72/100
+   → Risk Appetite: 35/100
+
+2. Generate budget guardrails
+   → Extend runway target: 18mo → 24mo
+   → Reduce burn 25% over 2 quarters
+   → Freeze vendor expansions
+
+3. Export board-ready brief
+   → Include regime narrative with sources
+   → Show reversal triggers
+   → Attach historical posture tracking
+
+4. Set watchlist alerts
+   → HY spread < 400bps: Resume growth mode
+   → VC funding velocity recovers 30%+
+   → Treasury curve steepens above +20bps
+```
+
+## Related features
+
+<CardGroup cols={2}>
+  <Card title="Regime Detection" href="/features/regime-engine">
+    Understand how Whether identifies market climates
+  </Card>
+  <Card title="Macro Signals" href="/data/macro-indicators">
+    See the data sources behind financial guidance
+  </Card>
+  <Card title="Executive Briefs" href="/features/briefing-pack">
+    Export citation-ready budget narratives
+  </Card>
+  <Card title="Decision Shield" href="/features/decision-shield">
+    Stress-test financial plans against downside scenarios
+  </Card>
+</CardGroup>
+
+## Key takeaway
+
+Whether translates external macro signals into internal financial constraints—helping you operate with the right level of aggression for current conditions, backed by auditable sources and freshness timestamps.

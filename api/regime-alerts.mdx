@@ -1,0 +1,126 @@
+---
+title: Regime Alerts
+api: GET /api/regime-alerts
+description: Retrieve market regime change alerts with Time Machine deep links
+---
+
+## Endpoint
+
+```
+GET /api/regime-alerts
+```
+
+Returns a list of regime change alert events. Each alert includes metadata about what triggered the regime change and provides deep links to the Time Machine for historical context.
+
+## Response
+
+<ResponseField name="alerts" type="array" required>
+  Array of regime alert events, ordered by creation date (newest first)
+  
+  <Expandable title="alert properties">
+    <ResponseField name="id" type="string" required>
+      Unique identifier for the alert event
+    </ResponseField>
+    
+    <ResponseField name="createdAt" type="string" required>
+      ISO 8601 timestamp when the alert was created
+    </ResponseField>
+    
+    <ResponseField name="payload" type="object" required>
+      Alert payload containing regime change details
+      
+      <Expandable title="payload properties">
+        <ResponseField name="reason" type="string">
+          Alert reason code explaining what triggered the regime change
+        </ResponseField>
+        
+        <ResponseField name="regime" type="string">
+          New regime classification (e.g., "EXPANSION", "CONTRACTION")
+        </ResponseField>
+        
+        <ResponseField name="recordDate" type="string">
+          Date of the regime assessment
+        </ResponseField>
+        
+        <ResponseField name="timeMachineUrl" type="string">
+          Deep link to Time Machine view for this specific date
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example Request
+
+```bash
+curl https://your-domain.com/api/regime-alerts
+```
+
+## Example Response
+
+```json
+{
+  "alerts": [
+    {
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "createdAt": "2026-03-03T09:15:00Z",
+      "payload": {
+        "reason": "CURVE_INVERSION_DEEPENED",
+        "regime": "LATE_CYCLE",
+        "recordDate": "2026-03-02",
+        "timeMachineUrl": "/time-machine?date=2026-03-02"
+      }
+    },
+    {
+      "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "createdAt": "2026-02-24T14:30:00Z",
+      "payload": {
+        "reason": "BASE_RATE_THRESHOLD_CROSSED",
+        "regime": "EXPANSION",
+        "recordDate": "2026-02-23",
+        "timeMachineUrl": "/time-machine?date=2026-02-23"
+      }
+    }
+  ]
+}
+```
+
+## Alert Reason Codes
+
+Common reason codes that trigger regime alerts:
+
+- `CURVE_INVERSION_DEEPENED` - Yield curve inversion became more pronounced
+- `CURVE_NORMALIZED` - Yield curve returned to normal shape
+- `BASE_RATE_THRESHOLD_CROSSED` - Base interest rate crossed a key threshold
+- `SENSOR_DIVERGENCE` - Multiple sensor readings indicate regime shift
+- `MOMENTUM_SHIFT` - Rate of change accelerated in new direction
+
+## Storage and Limits
+
+- Maximum of **64 alerts** are retained in storage
+- Older alerts are automatically pruned when limit is reached
+- Alerts are stored in server-side snapshot storage
+
+## Creating Alerts (POST)
+
+This endpoint also supports POST requests for creating new alerts (typically used internally):
+
+```bash
+curl -X POST https://your-domain.com/api/regime-alerts \
+  -H "Content-Type: application/json" \
+  -d '{
+    "reason": "CURVE_INVERSION_DEEPENED",
+    "regime": "LATE_CYCLE",
+    "recordDate": "2026-03-02",
+    "timeMachineUrl": "/time-machine?date=2026-03-02"
+  }'
+```
+
+The POST endpoint includes deduplication logic to prevent alert spam.
+
+## Use Cases
+
+- Monitoring regime transitions over time
+- Building alert notification systems
+- Historical regime change analysis
+- Linking to Time Machine for detailed investigation

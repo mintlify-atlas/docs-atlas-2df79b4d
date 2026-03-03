@@ -1,0 +1,293 @@
+---
+title: Making Decisions with Decision Shield
+description: Step-by-step workflow for validating operational decisions against current regime conditions
+---
+
+Decision Shield translates market climates into **operator-safe verdicts** for roadmap and organizational decisions. It produces plain-English guidance tied to live sensor readings, helping you time capital-intensive moves and avoid regime-blind mistakes.
+
+## Decision Validation Workflow
+
+<Steps>
+  <Step title="Identify your lifecycle stage">
+    Choose the stage that best matches your company's current maturity:
+
+    - **DISCOVERY:** Pre-PMF, validating hypotheses, fewer than 20 customers
+    - **GROWTH:** PMF confirmed, scaling GTM, rapid revenue growth
+    - **SCALE:** Established market position, expanding to new segments or geographies
+    - **MATURE:** Market leader, optimizing margins, defending position
+
+    **Why it matters:** Lifecycle adjusts risk tolerance. Capital-intensive moves are flagged as riskier for DISCOVERY teams.
+  </Step>
+
+  <Step title="Select decision category">
+    Categorize the decision domain:
+
+    | Category | Examples |
+    |----------|----------|
+    | **HIRING** | Headcount planning, team expansion, acqui-hires |
+    | **ROADMAP** | Product rewrites, platform investments, new verticals |
+    | **PRICING** | Discount campaigns, pricing model changes |
+    | **INFRASTRUCTURE** | Cloud migrations, data platform builds |
+    | **M_AND_A** | Acquisitions, divestitures |
+    | **GEOGRAPHIC_EXPANSION** | Opening new regions, international hiring |
+    | **RESTRUCTURING** | Layoffs, org redesigns, spin-offs |
+  </Step>
+
+  <Step title="Choose the specific action">
+    Select the decision you're evaluating:
+
+    - **HIRE:** Add full-time headcount
+    - **REWRITE:** Platform or codebase rewrite
+    - **LAUNCH:** Ship new product or feature line
+    - **DISCOUNT:** Offer pricing discounts or promotions
+    - **EXPAND:** Geographic or vertical market expansion
+    - **ACQUIRE:** M&A acquisition
+    - **DIVEST:** Sell or spin off business unit
+    - **INFRA_SPEND:** Large infrastructure investment
+    - **REGIONAL_EXPANSION:** Open office or hire in new region
+    - **RESTRUCTURE:** Org restructuring or headcount reduction
+  </Step>
+
+  <Step title="Call the Decision Shield API">
+    ```typescript
+    import { evaluateDecision } from "@/lib/decisionShield";
+    import { evaluateRegime } from "@/lib/regimeEngine";
+
+    // Get current regime
+    const assessment = evaluateRegime(treasuryData, thresholds, macroSeries);
+
+    // Evaluate decision
+    const decision = evaluateDecision(assessment, {
+      lifecycle: "GROWTH",
+      category: "HIRING",
+      action: "HIRE",
+      context: "Engineering team expansion: +10 engineers"
+    });
+
+    console.log(decision);
+    ```
+
+    **Response structure:**
+    ```json
+    {
+      "verdict": "RISKY",
+      "summary": "Execution call: Hire full-time headcount is risky for a growth team in defensive conditions, based on current signals.",
+      "bullets": [
+        "Base rate: 5.25% is above 5%, so capital is expensive.",
+        "Curve slope: inverted (-0.45%), signaling caution.",
+        "Tightness 78 vs risk appetite 52 keeps conditions in defensive."
+      ],
+      "guardrail": "Hire only for revenue-critical roles with 12-month payback windows.",
+      "reversalTrigger": "Revisit when tightness drops below 70 or risk appetite falls to or below 50 for 30 consecutive days (current: 78/52)."
+    }
+    ```
+  </Step>
+
+  <Step title="Interpret the verdict and act">
+    Use the verdict to guide execution timing:
+
+    - **SAFE:** Proceed with confidence. Regime supports this decision.
+    - **RISKY:** Proceed with guardrails. Apply additional constraints or defer if possible.
+    - **DANGEROUS:** Defer unless existential. Consider reversible alternatives.
+
+    Review the **guardrail** for decision-specific constraints and the **reversalTrigger** to schedule a follow-up review.
+  </Step>
+</Steps>
+
+---
+
+## Understanding Verdicts
+
+### SAFE
+
+**Meaning:** The current regime **supports** this decision. Market conditions are aligned with the action's risk profile.
+
+**Guidance:**
+- Execute with standard diligence
+- No additional regime-based constraints needed
+- Monitor reversal trigger for future planning
+
+**Example:** Launching a new product in EXPANSION conditions is SAFE—capital is cheap and buyers are confident.
+
+---
+
+### RISKY
+
+**Meaning:** The decision is **misaligned** with current conditions but **may be necessary**. Regime introduces elevated risk.
+
+**Guidance:**
+- Apply the guardrail constraint before proceeding
+- Shorten payback windows or scope
+- Prepare contingency plans (e.g., pause clauses in vendor contracts)
+- Review weekly until reversal trigger confirms stability
+
+**Example:** Hiring in DEFENSIVE conditions is RISKY—capital is expensive, so limit hires to revenue-critical roles.
+
+<Warning>
+**RISKY verdicts require discipline.** Ignoring guardrails during misaligned regimes amplifies downside exposure.
+</Warning>
+
+---
+
+### DANGEROUS
+
+**Meaning:** The decision is **strongly misaligned** with regime conditions. Execution carries significant downside risk.
+
+**Guidance:**
+- **Defer unless existential:** Only proceed if inaction causes greater harm
+- Explore reversible alternatives (e.g., contract hiring instead of FTE expansion)
+- Escalate to leadership with explicit regime context
+- If you must proceed, apply tightest possible scope and guardrails
+
+**Example:** Large infrastructure spend in SCARCITY is DANGEROUS—capital is expensive and risk appetite is low. Defer until EXPANSION.
+
+<Note>
+**Dangerous ≠ impossible.** If the decision is existential (e.g., compliance requirement, customer retention), proceed with extreme caution and tight guardrails.
+</Note>
+
+---
+
+## Decision Guardrails
+
+Guardrails are **action-specific constraints** that reduce risk when verdicts are RISKY or DANGEROUS. They apply regardless of lifecycle stage.
+
+### Example Guardrails
+
+| Action | Guardrail |
+|--------|----------|
+| **HIRE** | Hire only for revenue-critical roles with 12-month payback windows. |
+| **REWRITE** | Rewrite only if technical debt blocks revenue or causes customer churn. |
+| **LAUNCH** | Launch only features with strong customer pull; defer speculative experiments. |
+| **DISCOUNT** | Discount only to close pipeline or defend renewals; avoid volume-building discounts. |
+| **EXPAND** | Expand only to geographies with confirmed demand and local distribution. |
+| **ACQUIRE** | Acquire only for strategic fill (e.g., talent, tech); avoid market share plays. |
+| **DIVEST** | Divest non-core assets only if cash preservation is critical. |
+| **INFRA_SPEND** | Spend only to remove scale blockers or compliance gaps. |
+| **REGIONAL_EXPANSION** | Expand only to regions with existing customer clusters. |
+| **RESTRUCTURE** | Restructure only to reduce burn or realign to core revenue drivers. |
+
+<Note>
+Guardrails are sourced from `decisionShieldConfig.ts` and reviewed quarterly based on operator feedback.
+</Note>
+
+---
+
+## Reversal Triggers
+
+Reversal triggers tell you **when to revisit** the decision. Regimes must stay shifted for **30 consecutive days** to confirm a reversal.
+
+### Example Reversal Trigger
+
+**Current regime:** DEFENSIVE (tightness: 78, risk appetite: 52)
+
+**Trigger:**
+> "Revisit when tightness drops below 70 or risk appetite falls to or below 50 for 30 consecutive days (current: 78/52)."
+
+**Interpretation:**
+- If tightness falls to 68 and stays there for 30 days → regime shifts to EXPANSION or VOLATILE
+- If risk appetite falls to 48 and stays there for 30 days → regime shifts to SCARCITY
+
+**Action:** Set a calendar reminder 30 days out to re-evaluate the decision with updated regime data.
+
+---
+
+## Lifecycle-Based Adjustments
+
+Decision Shield applies **contextual adjustments** based on lifecycle stage:
+
+### DISCOVERY Stage
+
+**Capital-intensive actions** (HIRE, REWRITE, INFRA_SPEND, EXPAND, ACQUIRE, REGIONAL_EXPANSION) receive a **one-level verdict increase** (e.g., SAFE → RISKY).
+
+**Why:** Early-stage teams have limited runway and unproven revenue models. Regime misalignment compounds risk.
+
+**Example:**
+- **Base verdict:** HIRE in EXPANSION is SAFE
+- **Adjusted for DISCOVERY:** HIRE becomes RISKY
+- **Guardrail:** Hire only for product-market fit validation roles (e.g., founding engineers, design).
+
+---
+
+### MATURE Stage
+
+**Restructuring actions** (DIVEST, RESTRUCTURE) receive a **one-level verdict decrease** (e.g., RISKY → SAFE).
+
+**Why:** Mature companies have operational leverage and can execute cost optimization cleanly even in challenging regimes.
+
+**Example:**
+- **Base verdict:** DIVEST in SCARCITY is RISKY
+- **Adjusted for MATURE:** DIVEST becomes SAFE
+- **Guardrail:** Divest non-core assets to preserve cash and focus on defensible revenue.
+
+---
+
+## Contextual Decision Inputs
+
+The optional `context` field allows you to attach decision-specific notes for logging and audit trails:
+
+```typescript
+const decision = evaluateDecision(assessment, {
+  lifecycle: "GROWTH",
+  category: "INFRASTRUCTURE",
+  action: "INFRA_SPEND",
+  context: "Migrate to Kubernetes: $500K spend, 18-month ROI"
+});
+```
+
+**Context does not affect verdict logic** but is included in decision logs and exported briefs. Use it to document:
+- Cost and timeline estimates
+- Expected ROI or payback period
+- Strategic rationale
+- Stakeholder alignment notes
+
+---
+
+## Sensor Bullets Explained
+
+Each decision output includes **sensor bullets** that explain the regime scoring mechanics:
+
+**Example:**
+```json
+"bullets": [
+  "Base rate: 5.25% is above 5%, so capital is expensive.",
+  "Curve slope: inverted (-0.45%), signaling caution.",
+  "Tightness 78 vs risk appetite 52 keeps conditions in defensive."
+]
+```
+
+**Interpretation:**
+1. **Base rate bullet:** Tells you if borrowing costs are high (>5%) or moderate (≤5%)
+2. **Curve slope bullet:** Confirms inversion (negative slope) or steepness (positive slope)
+3. **Tightness/risk appetite summary:** Maps scores to the current regime
+
+---
+
+## Integrating with Planning Cycles
+
+### Quarterly Planning
+
+1. **Pre-planning (T-2 weeks):** Run Decision Shield on all major roadmap initiatives
+2. **Planning (T-1 week):** Filter out DANGEROUS verdicts; apply guardrails to RISKY items
+3. **Post-planning (T+1 week):** Export decisions and set reversal trigger reminders
+
+### Weekly Stand-ups
+
+- Surface any decisions in transition watch (regime confidence LOW)
+- Re-evaluate decisions from 30 days ago if reversal trigger conditions met
+- Flag new macro adjustments (e.g., VIX spike, VC funding slowdown)
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Understanding Regimes" icon="chart-line" href="/guides/understanding-regimes">
+    Learn how tightness and risk appetite scores are calculated
+  </Card>
+  <Card title="Alerts and Notifications" icon="bell" href="/guides/alerts-and-notifications">
+    Set up regime-change alerts to catch transitions early
+  </Card>
+  <Card title="Exporting Briefs" icon="file-export" href="/guides/exporting-briefs">
+    Share Decision Shield outputs with leadership and stakeholders
+  </Card>
+</CardGroup>

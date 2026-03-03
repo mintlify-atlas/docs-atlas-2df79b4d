@@ -1,80 +1,296 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Get started with Whether in under 5 minutes
 ---
 
-## Get started in three steps
+# Quickstart
 
-Get your documentation site running locally and make your first customization.
+Get started with Whether and make your first climate-informed decision in under 5 minutes.
 
-### Step 1: Set up your local environment
+## Prerequisites
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+Whether is a web-based platform that requires:
+- A modern web browser (Chrome, Firefox, Safari, or Edge)
+- Internet connection for live Treasury data
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+Whether works offline with cached snapshot data if the Treasury API is unavailable.
 </Note>
+
+## Step 1: Access the Platform
+
+<Steps>
+  <Step title="Navigate to the home page">
+    Open Whether in your browser. You'll land on the **Current Climate** page showing today's regime reading.
+    
+    The home page displays:
+    - Current regime label (SCARCITY, DEFENSIVE, VOLATILE, or EXPANSION)
+    - Tightness and risk appetite scores
+    - Operating constraints and immediate guidance
+    - Data source and freshness timestamps
+  </Step>
+  
+  <Step title="Check data freshness">
+    Look for the **Trust Status** indicator in the top-right corner:
+    - **Green badge**: Live data, safe for near-term planning
+    - **Yellow badge**: Cached data, pause irreversible decisions
+    - **Blue badge**: Historical mode, use for retrospectives only
+    
+    All regime readings include:
+    - `record_date` - Date of Treasury data
+    - `fetched_at` - When Whether retrieved the data
+    - `source` - US Treasury Fiscal Data API endpoint
+  </Step>
+  
+  <Step title="Understand your current regime">
+    The regime hero section explains:
+    - **What the regime means** (e.g., "Capital is expensive and risk appetite is low")
+    - **Operating constraints** (e.g., "Shorten payback windows and preserve cash")
+    - **Net operating stance** (e.g., "Maintain constraint discipline. No expansion moves.")
+  </Step>
+</Steps>
+
+<Tip>
+Bookmark the home page for quick access during planning meetings.
+</Tip>
+
+## Step 2: Understand Your First Regime Reading
+
+Whether classifies market conditions into four regimes based on two scores:
+
+### Tightness Score (0-100)
+
+**What it measures:** How expensive is capital right now?
+
+**Inputs:**
+- **Base rate** (1-month or 3-month Treasury yield): Cost of short-term money
+- **Curve inversion** (10Y - 2Y slope): Stress signal when negative
+
+**Threshold:** Tightness > **70** signals expensive capital
+
+<Note>
+**Example reading:**
+- Base rate: 5.2%
+- Curve slope: -0.2%
+- **Tightness: 88** (Capital is expensive)
+</Note>
+
+### Risk Appetite Score (0-100)
+
+**What it measures:** How willing are investors to take risk?
+
+**Inputs:**
+- **Curve slope** (10Y - 2Y): Steeper slope = more confidence
+
+**Threshold:** Risk appetite > **50** signals healthy confidence
+
+<Note>
+**Example reading:**
+- Curve slope: +0.3%
+- **Risk Appetite: 52** (Moderate confidence)
+</Note>
+
+### Regime Classification
+
+Once scored, Whether maps these dimensions to one of four regimes:
+
+<CardGroup cols={2}>
+  <Card title="SCARCITY" color="#dc2626">
+    **Tightness > 70, Risk ≤ 50**
+    
+    Capital is expensive, risk appetite is low.
+    
+    → Prioritize survival over growth
+  </Card>
+  
+  <Card title="DEFENSIVE" color="#f59e0b">
+    **Tightness > 70, Risk > 50**
+    
+    Capital is expensive, risk appetite is moderate.
+    
+    → Operate for efficiency
+  </Card>
+  
+  <Card title="VOLATILE" color="#8b5cf6">
+    **Tightness ≤ 70, Risk ≤ 50**
+    
+    Capital is cheaper, risk appetite is weak.
+    
+    → Build trust and resilience
+  </Card>
+  
+  <Card title="EXPANSION" color="#10b981">
+    **Tightness ≤ 70, Risk > 50**
+    
+    Capital is cheap, risk appetite is healthy.
+    
+    → Move quickly to capture share
+  </Card>
+</CardGroup>
+
+## Step 3: Make Your First Decision with Decision Shield
+
+**Decision Shield** converts regime reads into concrete verdicts for specific planning decisions.
+
+<Steps>
+  <Step title="Navigate to Decision Shield">
+    From the home page, click **Operations** in the navigation menu, then select **Decision Shield**.
+  </Step>
+  
+  <Step title="Describe your decision">
+    Use the dropdown inputs to describe what you're planning:
+    
+    **Lifecycle:**
+    - Early (prototype, MVP)
+    - Growth (scaling, expansion)
+    - Mature (optimization, maintenance)
+    
+    **Category:**
+    - Hiring (new roles, team expansion)
+    - Product (features, new products)
+    - Platform (infrastructure, tooling)
+    - Marketing (campaigns, brand)
+    
+    **Action:**
+    - Add (new initiative)
+    - Expand (scale existing)
+    - Cut (reduce or pause)
+    - Hold (maintain current level)
+  </Step>
+  
+  <Step title="Review the verdict">
+    Decision Shield returns a verdict based on the current regime:
+    
+    **Safe:** Green light—proceed with normal approval flow
+    
+    **Risky:** Yellow light—requires extra scrutiny, add milestones or guardrails
+    
+    **Dangerous:** Red light—delay or cancel unless business-critical
+    
+    Each verdict includes:
+    - 2-4 bullets grounded in current sensors
+    - Guardrail constraint (e.g., "Cap experiment spend at 5% of runway")
+    - Reversal trigger (e.g., "Reverse if tightness crosses 80")
+  </Step>
+  
+  <Step title="Copy to clipboard">
+    Click **Copy to Clipboard** to export the verdict for Slack, email, or planning docs.
+    
+    The copied output includes:
+    - Decision inputs
+    - Verdict and reasoning
+    - Current regime and sensor values
+    - Source URLs and timestamps
+  </Step>
+</Steps>
+
+<Tip>
+**Example decision:**
+- Lifecycle: Growth
+- Category: Hiring
+- Action: Add
+- Regime: DEFENSIVE
+- Verdict: **Risky** — "Hiring in DEFENSIVE regime requires proven ROI. Stage offers behind revenue milestones."
+</Tip>
+
+## Step 4: Set Up Alerts
+
+**Signal Ops** sends alerts when regime changes or key thresholds are crossed.
+
+<Steps>
+  <Step title="Navigate to Signal Ops">
+    From the navigation menu, click **Operations** → **Signal Ops**.
+  </Step>
+  
+  <Step title="Configure alert channels">
+    Choose where to receive alerts:
+    - Email (weekly digest)
+    - Slack (real-time regime changes)
+    - Webhook (custom integrations)
+  </Step>
+  
+  <Step title="Set threshold watch rules">
+    Configure which events trigger alerts:
+    - **Regime change** (EXPANSION → DEFENSIVE)
+    - **Tightness crosses 70** (capital tightening)
+    - **Risk appetite crosses 50** (confidence weakening)
+    - **Curve inverts** (10Y < 2Y)
+  </Step>
+  
+  <Step title="Test your alert setup">
+    Click **Send Test Alert** to confirm delivery to your chosen channels.
+  </Step>
+</Steps>
+
+<Note>
+Alerts fire **only on changes**, not on every data refresh. This prevents alert fatigue.
+</Note>
+
+## What to Do Next
+
+<CardGroup cols={2}>
+  <Card title="Review Signals" icon="tower-cell" href="/data/treasury-yields">
+    Explore the evidence behind regime classifications (base rate, curve slope, macro adjustments)
+  </Card>
+  
+  <Card title="Use Time Machine" icon="clock-rotate-left" href="/features/time-machine">
+    Replay historical regimes to see how past conditions compared to today
+  </Card>
+  
+  <Card title="Export Briefs" icon="file-export" href="/features/briefing-pack">
+    Generate executive summaries for leadership meetings (Slack, email, PDF)
+  </Card>
+  
+  <Card title="Understand How It Works" icon="gears" href="/how-it-works">
+    Deep-dive into the Regime Engine formulas and classification logic
+  </Card>
+</CardGroup>
+
+## Common Questions
+
+<AccordionGroup>
+  <Accordion title="How often does Whether update?">
+    Whether fetches Treasury data **once per day** (end-of-day updates from the US Treasury). Regime readings are cached for 24 hours with revalidation.
+    
+    The `fetched_at` timestamp shows when Whether last retrieved data.
+  </Accordion>
+  
+  <Accordion title="What if Treasury data is missing?">
+    If the Treasury API is unavailable, Whether serves **cached snapshot data** from `data/` and displays an **OFFLINE** badge.
+    
+    Operators should pause irreversible decisions until the live feed returns or they confirm the cached data.
+  </Accordion>
+  
+  <Accordion title="Can I override regime thresholds?">
+    Yes. Operators can override thresholds via **URL query parameters**:
+    - `?baseRateTightness=4.5` (default: 5.0)
+    - `?tightnessRegime=65` (default: 70)
+    - `?riskAppetiteRegime=55` (default: 50)
+    
+    Overrides are tracked in an on-screen audit trail.
+  </Accordion>
+  
+  <Accordion title="Is this investment advice?">
+    **No.** Whether provides operational strategy guidance, not investment advice. It helps teams align internal planning with macro conditions—it does not recommend trading or portfolio allocation.
+  </Accordion>
+  
+  <Accordion title="How accurate are the regime classifications?">
+    Whether uses **deterministic, testable rules**—no opaque ML. Accuracy depends on:
+    - Freshness of Treasury data (tracked via `fetched_at`)
+    - Appropriateness of thresholds for your context (customizable)
+    - Quality of your decision inputs (garbage in, garbage out)
+    
+    Whether is designed to reduce common mistakes, not eliminate judgment.
+  </Accordion>
+</AccordionGroup>
+
+## Get Help
+
+If you need assistance:
+- Check the [How It Works](/how-it-works) guide for technical details
+- Review [SPECS.md](https://github.com/your-org/whether/blob/main/SPECS.md) for MVP scope and data sourcing
+- Open an issue on GitHub for bugs or feature requests
+
+<Card title="Next: How It Works" icon="arrow-right" href="/how-it-works">
+  Understand the Regime Engine formulas and classification logic
+</Card>

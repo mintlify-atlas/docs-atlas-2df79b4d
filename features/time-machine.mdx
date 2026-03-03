@@ -1,0 +1,507 @@
+---
+title: 'Time Machine'
+description: 'Replay historical regime classifications and test decisions against past market conditions'
+icon: 'clock-rotate-left'
+---
+
+## Overview
+
+**Time Machine** enables point-in-time regime analysis using pre-cached Treasury snapshots. It lets you:
+
+<CardGroup cols={2}>
+  <Card title="Historical Playback" icon="backward">
+    View regime assessments as they appeared in the past
+  </Card>
+  <Card title="Decision Testing" icon="flask">
+    Validate current strategies against prior climates
+  </Card>
+  <Card title="Regime Comparison" icon="code-compare">
+    Compare tightness and risk appetite across months
+  </Card>
+  <Card title="Trend Analysis" icon="chart-line">
+    Track regime transitions over 24+ months
+  </Card>
+</CardGroup>
+
+Time Machine uses **deterministic replay**: the same inputs always produce the same regime classification, ensuring reproducibility.
+
+## How It Works
+
+Time Machine queries a pre-fetched cache of Treasury snapshots stored locally:
+
+```typescript lib/timeMachine/timeMachineCache.ts
+const sortedSnapshots = parseTimeMachineCache(rawCache)
+  .map((snapshot) => ({
+    ...snapshot,
+    isLive: false,  // Mark as historical data
+  }))
+  .sort(
+    (a, b) =>
+      new Date(a.record_date).getTime() - new Date(b.record_date).getTime()
+  );
+```
+
+<Steps>
+  <Step title="Select month & year">
+    Choose a historical date from the available cache range
+  </Step>
+  <Step title="Query snapshot">
+    Time Machine finds the Treasury data snapshot for that month
+  </Step>
+  <Step title="Run regime engine">
+    Same `evaluateRegime()` function runs with historical inputs
+  </Step>
+  <Step title="Display assessment">
+    UI shows regime, scores, and constraints as they were at that date
+  </Step>
+</Steps>
+
+<Info>
+  Time Machine snapshots are updated monthly. The cache covers **24+ months** of historical data by default.
+</Info>
+
+## Finding Snapshots
+
+### Query by Date
+
+```typescript lib/timeMachine/timeMachineCache.ts
+export const findTimeMachineSnapshot = (asOf: string): TreasuryData | null => {
+  const target = new Date(asOf);
+  if (Number.isNaN(target.valueOf())) {
+    return null;
+  }
+
+  const targetTime = target.getTime();
+  const index = findSnapshotIndexAtOrBefore(targetTime);
+  const candidate = index === null ? null : sortedSnapshots[index];
+
+  if (!candidate) {
+    return null;
+  }
+
+  const { year: _year, month: _month, ...data } = candidate;
+  return data;
+};
+```
+
+<Tip>
+  `findTimeMachineSnapshot()` uses binary search for O(log n) lookup performance—ideal for rapid historical queries.
+</Tip>
+
+### Get Previous Snapshot
+
+```typescript lib/timeMachine/timeMachineCache.ts
+export const getPreviousTimeMachineSnapshot = (asOf: string): TreasuryData | null => {
+  const target = new Date(asOf);
+  if (Number.isNaN(target.valueOf())) {
+    return null;
+  }
+
+  const targetTime = target.getTime();
+  const index = findSnapshotIndexAtOrBefore(targetTime);
+  const candidateIndex =
+    index === null
+      ? null
+      : snapshotTimestamps[index] < targetTime
+        ? index
+        : index - 1;
+  const candidate =
+    candidateIndex === null || candidateIndex < 0
+      ? null
+      : sortedSnapshots[candidateIndex];
+
+  if (!candidate) {
+    return null;
+  }
+
+  const { year: _year, month: _month, ...data } = candidate;
+  return data;
+};
+```
+
+## Month/Year Selector
+
+Time Machine provides URL-driven navigation:
+
+```typescript lib/timeMachine/timeMachineSelection.ts
+export const parseTimeMachineRequest = (searchParams?: {
+  month?: string;
+  year?: string;
+}): TimeMachineRequest | null => {
+  if (!searchParams?.month || !searchParams?.year) {
+    return null;
+  }
+
+  const month = Number(searchParams.month);
+  const year = Number(searchParams.year);
+
+  if (!Number.isInteger(month) || !Number.isInteger(year)) {
+    return null;
+  }
+
+  if (month < 1 || month > 12) {
+    return null;
+  }
+
+  if (year < 2000) {
+    return null;
+  }
+
+  return { month, year };
+};
+```
+
+### Building Time Machine URLs
+
+```typescript lib/timeMachine/timeMachineSelection.ts
+export const buildTimeMachineHref = (
+  href: string,
+  selection?: TimeMachineRequest | null
+) => {
+  if (!selection) {
+    return href;
+  }
+
+  const [baseHref, hash = ""] = href.split("#");
+  const [pathname, queryString = ""] = baseHref.split("?");
+  const params = new URLSearchParams(queryString);
+
+  params.set("month", String(selection.month));
+  params.set("year", String(selection.year));
+
+  const query = params.toString();
+  const hashSuffix = hash ? `#${hash}` : "";
+
+  return query ? `${pathname}?${query}${hashSuffix}` : `${pathname}${hashSuffix}`;
+};
+```
+
+<CodeGroup>
+```typescript Example URLs
+// View December 2023 regime
+"/regime?month=12&year=2023"
+
+// View March 2022 regime
+"/regime?month=3&year=2022"
+
+// Return to live view (no params)
+"/regime"
+```
+
+```typescript Usage in Components
+import { buildTimeMachineHref } from "@/lib/timeMachine/timeMachineSelection";
+
+// Generate previous month link
+const previousHref = buildTimeMachineHref(
+  "/regime",
+  { month: 11, year: 2023 }
+);
+
+<Link href={previousHref}>← November 2023</Link>
+```
+</CodeGroup>
+
+## Regime Series Analysis
+
+Get multi-month regime timelines:
+
+```typescript lib/timeMachine/timeMachineCache.ts
+export const getTimeMachineRegimeSeries = (
+  months = DEFAULT_REGIME_SERIES_MONTHS,  // 24 months default
+  overrides?: Partial<RegimeThresholds>
+): TimeMachineRegimeEntry[] => {
+  const cacheKey = buildRegimeSeriesCacheKey(months, overrides);
+  const cached = timeMachineRegimeSeriesCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  const sliceStart = Math.max(sortedSnapshots.length - months, 0);
+  const series = sortedSnapshots.slice(sliceStart).map((snapshot) => {
+    const assessment = evaluateRegime(snapshot, overrides);
+    return {
+      year: snapshot.year,
+      month: snapshot.month,
+      recordDate: snapshot.record_date,
+      regime: assessment.regime,
+      summary: assessment.description,
+    };
+  });
+  setRegimeSeriesCache(cacheKey, series);
+  return series;
+};
+```
+
+<Frame caption="Regime Series Output">
+  ```typescript
+  [
+    {
+      year: 2022,
+      month: 1,
+      recordDate: "2022-01-31",
+      regime: "EXPANSION",
+      summary: "Capital is cheap and risk appetite is healthy. Move quickly to capture share."
+    },
+    {
+      year: 2022,
+      month: 2,
+      recordDate: "2022-02-28",
+      regime: "VOLATILE",
+      summary: "Capital is cheaper but risk appetite is weak. Build trust and resilience."
+    },
+    // ... 22 more months
+  ]
+  ```
+</Frame>
+
+<Note>
+  Regime series results are **cached** for performance. Cache keys include threshold overrides to support custom configurations.
+</Note>
+
+## Rolling Yield Series
+
+Visualize Treasury yield trends:
+
+```typescript lib/timeMachine/timeMachineCache.ts
+export const getTimeMachineRollingYieldSeries = (
+  months = DEFAULT_ROLLING_YIELD_MONTHS,  // 12 months default
+  asOf?: string
+): {
+  oneMonth: SeriesHistoryPoint[];
+  threeMonth: SeriesHistoryPoint[];
+  twoYear: SeriesHistoryPoint[];
+  tenYear: SeriesHistoryPoint[];
+} => {
+  const resolvedMonths = Math.max(months, MIN_ROLLING_YIELD_MONTHS);
+  const asOfTime = asOf ? new Date(asOf).getTime() : Number.NaN;
+  const asOfIndex =
+    asOf && Number.isFinite(asOfTime)
+      ? findSnapshotIndexAtOrBefore(asOfTime)
+      : sortedSnapshots.length - 1;
+  const lastIndex =
+    typeof asOfIndex === "number" && asOfIndex >= 0
+      ? asOfIndex
+      : sortedSnapshots.length - 1;
+  const sliceStart = Math.max(lastIndex + 1 - resolvedMonths, 0);
+  const rollingSnapshots = sortedSnapshots.slice(sliceStart, lastIndex + 1);
+
+  return {
+    oneMonth: rollingSnapshots.map((snapshot) => ({
+      date: snapshot.record_date,
+      value: snapshot.yields.oneMonth ?? null,
+    })),
+    threeMonth: rollingSnapshots.map((snapshot) => ({
+      date: snapshot.record_date,
+      value: snapshot.yields.threeMonth ?? null,
+    })),
+    twoYear: rollingSnapshots.map((snapshot) => ({
+      date: snapshot.record_date,
+      value: snapshot.yields.twoYear ?? null,
+    })),
+    tenYear: rollingSnapshots.map((snapshot) => ({
+      date: snapshot.record_date,
+      value: snapshot.yields.tenYear ?? null,
+    })),
+  };
+};
+```
+
+<Info>
+  Use rolling yield series to chart yield curve evolution over time—ideal for visualizing inversions and steepening trends.
+</Info>
+
+## Cache Coverage
+
+Check available date range:
+
+```typescript lib/timeMachine/timeMachineCache.ts
+const timeMachineCoverage = (() => {
+  const earliest = sortedSnapshots[0];
+  const latest = sortedSnapshots.at(-1);
+  return {
+    earliest: earliest?.record_date ?? null,
+    latest: latest?.record_date ?? null,
+  };
+})();
+
+export const getTimeMachineCoverage = () => {
+  return timeMachineCoverage;
+};
+```
+
+<CodeGroup>
+```typescript Get Coverage
+import { getTimeMachineCoverage } from "@/lib/timeMachine/timeMachineCache";
+
+const coverage = getTimeMachineCoverage();
+console.log(`Available data: ${coverage.earliest} to ${coverage.latest}`);
+// "Available data: 2022-01-31 to 2024-02-29"
+```
+
+```typescript Get Available Years
+import { getTimeMachineYears } from "@/lib/timeMachine/timeMachineCache";
+
+const years = getTimeMachineYears();
+// [2024, 2023, 2022]  (descending order)
+```
+
+```typescript Get Months for Year
+import { getTimeMachineMonthsByYear } from "@/lib/timeMachine/timeMachineCache";
+
+const monthsByYear = getTimeMachineMonthsByYear();
+console.log(monthsByYear[2023]);
+// [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+```
+</CodeGroup>
+
+## Use Cases
+
+### 1. Historical Decision Validation
+
+**Scenario**: "Would our Q1 2023 hiring push have been safe in hindsight?"
+
+```typescript
+import { findTimeMachineSnapshot } from "@/lib/timeMachine/timeMachineCache";
+import { evaluateRegime } from "@/lib/regimeEngine";
+import { evaluateDecision } from "@/lib/decisionShield";
+
+const snapshot = findTimeMachineSnapshot("2023-03-31");
+if (snapshot) {
+  const assessment = evaluateRegime(snapshot);
+  const decision = {
+    lifecycle: "GROWTH",
+    category: "HIRING",
+    action: "HIRE",
+  };
+  const verdict = evaluateDecision(assessment, decision);
+  console.log(`Q1 2023 verdict: ${verdict.verdict}`);
+  console.log(`Regime: ${assessment.regime}`);
+}
+```
+
+### 2. Regime Transition Tracking
+
+**Scenario**: "When did we last shift from EXPANSION to DEFENSIVE?"
+
+```typescript
+import { getTimeMachineRegimeSeries } from "@/lib/timeMachine/timeMachineCache";
+
+const series = getTimeMachineRegimeSeries(24);
+let lastRegime = null;
+
+series.forEach((entry) => {
+  if (lastRegime === "EXPANSION" && entry.regime === "DEFENSIVE") {
+    console.log(`Transition on ${entry.recordDate}`);
+  }
+  lastRegime = entry.regime;
+});
+```
+
+### 3. Yield Curve Retrospective
+
+**Scenario**: "Chart 10Y-2Y inversion duration in 2022"
+
+```typescript
+import { getTimeMachineRollingYieldSeries } from "@/lib/timeMachine/timeMachineCache";
+
+const yields = getTimeMachineRollingYieldSeries(12, "2022-12-31");
+const slopes = yields.twoYear.map((point, i) => {
+  const tenYear = yields.tenYear[i].value;
+  const twoYear = point.value;
+  return {
+    date: point.date,
+    slope: tenYear !== null && twoYear !== null ? tenYear - twoYear : null,
+  };
+});
+
+slopes.forEach(({ date, slope }) => {
+  if (slope !== null && slope < 0) {
+    console.log(`${date}: inverted (${slope.toFixed(2)}%)`);
+  }
+});
+```
+
+## Historical Mode Banner
+
+Time Machine generates a visual indicator for historical views:
+
+```typescript lib/timeMachine/timeMachine.ts
+export const formatHistoricalBanner = (year: number, month: number) => {
+  const paddedMonth = String(month).padStart(2, "0");
+  return `Historical mode active · ${year}-${paddedMonth}`;
+};
+```
+
+<Warning>
+  Always display the historical banner when Time Machine is active. This prevents operators from mistaking stale data for current conditions.
+</Warning>
+
+## Navigation Controls
+
+### Adjacent Month Selection
+
+```typescript lib/timeMachine/timeMachineSelection.ts
+export const getAdjacentTimeMachineRequest = (
+  selection: TimeMachineRequest,
+  direction: "previous" | "next"
+): TimeMachineRequest | null => {
+  return getAdjacentTimeMachineEntry(selection.year, selection.month, direction);
+};
+```
+
+<CodeGroup>
+```typescript Previous Month
+import { getAdjacentTimeMachineRequest } from "@/lib/timeMachine/timeMachineSelection";
+
+const current = { month: 3, year: 2023 };
+const previous = getAdjacentTimeMachineRequest(current, "previous");
+// { month: 2, year: 2023 }
+```
+
+```typescript Next Month
+const next = getAdjacentTimeMachineRequest(current, "next");
+// { month: 4, year: 2023 }
+```
+
+```typescript Year Boundary
+const january = { month: 1, year: 2023 };
+const previousDecember = getAdjacentTimeMachineRequest(january, "previous");
+// { month: 12, year: 2022 }
+```
+</CodeGroup>
+
+## Signal Ops Integration
+
+Time Machine deep links appear in regime change alerts:
+
+```typescript lib/signalOps.ts
+export type SignalAlertPayload = {
+  previousRecordDate: string;
+  currentRecordDate: string;
+  previousAssessment: RegimeAssessment;
+  currentAssessment: RegimeAssessment;
+  reasons: RegimeChangeReason[];
+  sourceUrls: string[];
+  timeMachineHref: string;  // Deep link to historical comparison
+};
+```
+
+<Tip>
+  When [Signal Ops](/features/signal-ops) fires a regime change alert, the `timeMachineHref` field links directly to the Time Machine view for that date—enabling instant historical context.
+</Tip>
+
+## Related Features
+
+<CardGroup cols={2}>
+  <Card title="Regime Engine" icon="gauge-high" href="/features/regime-engine">
+    Understand regime classification logic
+  </Card>
+  <Card title="Decision Shield" icon="shield-check" href="/features/decision-shield">
+    Test decisions against historical regimes
+  </Card>
+  <Card title="Signal Ops" icon="bell" href="/features/signal-ops">
+    Get Time Machine links in regime alerts
+  </Card>
+  <Card title="Briefing Pack" icon="file-export" href="/features/briefing-pack">
+    Export historical regime comparisons
+  </Card>
+</CardGroup>

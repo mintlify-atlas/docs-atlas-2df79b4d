@@ -1,0 +1,534 @@
+---
+title: 'Briefing Pack'
+description: 'Export regime assessments to Slack, email, and PDF formats with citations and slide-ready summaries'
+icon: 'file-export'
+---
+
+## Overview
+
+**Briefing Pack** transforms regime assessments into shareable formats for stakeholder communication. It generates copy-ready leadership briefs, integration payloads for Slack and Notion, and structured metadata for downstream automation.
+
+Key outputs:
+
+<CardGroup cols={3}>
+  <Card title="Slack Blocks" icon="slack">
+    Formatted message blocks for #planning channels
+  </Card>
+  <Card title="Notion Payloads" icon="book">
+    Database entries with rich text and metadata
+  </Card>
+  <Card title="Linear Issues" icon="rectangle-terminal">
+    Auto-tagged issues with regime context
+  </Card>
+  <Card title="Email Summaries" icon="envelope">
+    Plain-text and HTML weekly digests
+  </Card>
+  <Card title="PDF Reports" icon="file-pdf">
+    Slide-ready constraint summaries
+  </Card>
+  <Card title="Copy-Ready Briefs" icon="clipboard">
+    Markdown for leadership updates
+  </Card>
+</CardGroup>
+
+## Export Formats
+
+### Slack
+
+```typescript lib/integrationBriefs.ts
+export const buildWeeklyMandatePayload = (
+  target: IntegrationTarget,
+  assessment: RegimeAssessment,
+  treasury: TreasuryData,
+) => {
+  const envelope = buildWeeklyMandateEnvelope(assessment, treasury);
+
+  if (target === "slack") {
+    return {
+      channel: "#planning",
+      text: `${envelope.title}\n${envelope.summary}`,
+      blocks: [
+        { type: "header", text: { type: "plain_text", text: envelope.title } },
+        { type: "section", text: { type: "mrkdwn", text: envelope.summary } },
+        {
+          type: "section",
+          text: { type: "mrkdwn", text: envelope.constraints.map((item) => `• ${item}`).join("\n") },
+        },
+      ],
+      metadata: envelope,
+    };
+  }
+  // ...
+};
+```
+
+<Frame caption="Slack Block Output">
+  ```json
+  {
+    "channel": "#planning",
+    "text": "Whether weekly mandate — 2024-03-15\nDEFENSIVE: Tightness 72/100, Risk appetite 52/100.",
+    "blocks": [
+      {
+        "type": "header",
+        "text": {
+          "type": "plain_text",
+          "text": "Whether weekly mandate — 2024-03-15"
+        }
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "DEFENSIVE: Tightness 72/100, Risk appetite 52/100."
+        }
+      },
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "• Focus on margin expansion and retention.\n• Cut low-leverage experiments.\n• Convert demand with tighter sales cycles."
+        }
+      }
+    ]
+  }
+  ```
+</Frame>
+
+<Tip>
+  Slack blocks use `mrkdwn` format—supports **bold**, _italic_, and bullet lists natively.
+</Tip>
+
+### Notion
+
+```typescript lib/integrationBriefs.ts
+if (target === "notion") {
+  return {
+    parent: { type: "database_id", database_id: "weekly-mandates" },
+    properties: {
+      Name: { title: [{ text: { content: envelope.title } }] },
+      Regime: { select: { name: assessment.regime } },
+      Summary: { rich_text: [{ text: { content: envelope.summary } }] },
+      RecordDate: { rich_text: [{ text: { content: envelope.recordDate } }] },
+    },
+    children: envelope.constraints.map((item) => ({
+      object: "block",
+      type: "bulleted_list_item",
+      bulleted_list_item: { rich_text: [{ type: "text", text: { content: item } }] },
+    })),
+    metadata: envelope,
+  };
+}
+```
+
+<Frame caption="Notion Database Entry">
+  | **Field** | **Value** |
+  |-----------|----------|
+  | Name | Whether weekly mandate — 2024-03-15 |
+  | Regime | DEFENSIVE |
+  | Summary | DEFENSIVE: Tightness 72/100, Risk appetite 52/100. |
+  | RecordDate | 2024-03-15 |
+  | **Children** | • Focus on margin expansion and retention. • Cut low-leverage experiments. • Convert demand with tighter sales cycles. |
+</Frame>
+
+<Note>
+  Notion payloads use the [Notion API](https://developers.notion.com/reference/page) schema. The `metadata` field preserves full regime context for downstream queries.
+</Note>
+
+### Linear
+
+```typescript lib/integrationBriefs.ts
+return {
+  title: envelope.title,
+  description: envelope.markdown,
+  labels: ["whether", assessment.regime.toLowerCase()],
+  metadata: envelope,
+};
+```
+
+<CodeGroup>
+```markdown Linear Issue Body
+## Whether weekly mandate — 2024-03-15
+DEFENSIVE: Tightness 72/100, Risk appetite 52/100.
+
+### Constraints
+- Focus on margin expansion and retention.
+- Cut low-leverage experiments.
+- Convert demand with tighter sales cycles.
+
+Source: https://fiscaldata.treasury.gov/datasets/...
+```
+
+```typescript Labels
+["whether", "defensive"]
+```
+</CodeGroup>
+
+<Tip>
+  Linear labels enable filtering roadmap issues by regime—useful for retrospective analysis of decision timing.
+</Tip>
+
+## Weekly Mandate Envelope
+
+All export formats derive from a shared envelope:
+
+```typescript lib/integrationBriefs.ts
+export type WeeklyMandateEnvelope = {
+  title: string;                          // "Whether weekly mandate — YYYY-MM-DD"
+  summary: string;                        // "REGIME: Tightness X/100, Risk appetite Y/100."
+  recordDate: string;                     // ISO date (YYYY-MM-DD)
+  regime: RegimeAssessment["regime"];     // SCARCITY | DEFENSIVE | VOLATILE | EXPANSION
+  markdown: string;                       // Full markdown representation
+  constraints: string[];                  // Top 3 operational constraints
+};
+
+export const buildWeeklyMandateEnvelope = (
+  assessment: RegimeAssessment,
+  treasury: TreasuryData,
+): WeeklyMandateEnvelope => {
+  const title = `Whether weekly mandate — ${treasury.record_date}`;
+  const summary = `${assessment.regime}: Tightness ${assessment.scores.tightness}/100, Risk appetite ${assessment.scores.riskAppetite}/100.`;
+  const constraints = assessment.constraints.slice(0, 3);
+
+  return {
+    title,
+    summary,
+    recordDate: treasury.record_date,
+    regime: assessment.regime,
+    constraints,
+    markdown: [
+      `## ${title}`,
+      summary,
+      "",
+      "### Constraints",
+      ...constraints.map((item) => `- ${item}`),
+      "",
+      `Source: ${treasury.source}`,
+    ].join("\n"),
+  };
+};
+```
+
+<CodeGroup>
+```typescript Example Envelope
+{
+  title: "Whether weekly mandate — 2024-03-15",
+  summary: "DEFENSIVE: Tightness 72/100, Risk appetite 52/100.",
+  recordDate: "2024-03-15",
+  regime: "DEFENSIVE",
+  constraints: [
+    "Focus on margin expansion and retention.",
+    "Cut low-leverage experiments.",
+    "Convert demand with tighter sales cycles."
+  ],
+  markdown: "## Whether weekly mandate — 2024-03-15\nDEFENSIVE: Tightness 72/100, Risk appetite 52/100.\n\n### Constraints\n- Focus on margin expansion and retention.\n- Cut low-leverage experiments.\n- Convert demand with tighter sales cycles.\n\nSource: https://fiscaldata.treasury.gov/datasets/..."
+}
+```
+
+```markdown Markdown Output
+## Whether weekly mandate — 2024-03-15
+DEFENSIVE: Tightness 72/100, Risk appetite 52/100.
+
+### Constraints
+- Focus on margin expansion and retention.
+- Cut low-leverage experiments.
+- Convert demand with tighter sales cycles.
+
+Source: https://fiscaldata.treasury.gov/datasets/...
+```
+</CodeGroup>
+
+<Info>
+  The envelope's `markdown` field is **copy-ready**: paste directly into PRDs, Monday planning docs, or all-hands slide decks.
+</Info>
+
+## Integration Targets
+
+```typescript lib/integrationBriefs.ts
+export type IntegrationTarget = "slack" | "notion" | "linear";
+
+export const integrationTargets: IntegrationTarget[] = ["slack", "notion", "linear"];
+
+export const parseIntegrationTarget = (value: string | null): IntegrationTarget | null => {
+  if (!value) {
+    return null;
+  }
+  return integrationTargets.find((target) => target === value) ?? null;
+};
+```
+
+<Tabs>
+  <Tab title="Slack">
+    **Best for**: Async team updates in #planning or #leadership channels
+    
+    - Rendered as message blocks with header + constraints
+    - Supports threading for discussion
+    - Metadata preserved for bot commands
+  </Tab>
+  <Tab title="Notion">
+    **Best for**: Structured weekly mandate database
+    
+    - Each mandate becomes a database row
+    - Filterable by regime and date
+    - Full-text search across constraints
+  </Tab>
+  <Tab title="Linear">
+    **Best for**: Roadmap context and retrospectives
+    
+    - Auto-tagged with regime label
+    - Links regime to specific issues
+    - Useful for "Why did we delay X?" questions
+  </Tab>
+</Tabs>
+
+## Slide-Ready Summaries
+
+Briefing Pack outputs are optimized for executive presentations:
+
+<Steps>
+  <Step title="Generate envelope">
+    Call `buildWeeklyMandateEnvelope(assessment, treasury)`
+  </Step>
+  <Step title="Copy markdown">
+    Extract `envelope.markdown` field
+  </Step>
+  <Step title="Paste into slides">
+    Use Google Slides, Keynote, or PowerPoint markdown import
+  </Step>
+  <Step title="Add visuals (optional)">
+    Supplement with regime trend charts from [Time Machine](/features/time-machine)
+  </Step>
+</Steps>
+
+<Frame caption="Slide Deck Example">
+  ```
+  ┌────────────────────────────────────────────┐
+  │ WHETHER WEEKLY MANDATE — 2024-03-15        │
+  ├────────────────────────────────────────────┤
+  │ DEFENSIVE: Tightness 72/100,               │
+  │ Risk appetite 52/100.                      │
+  │                                            │
+  │ CONSTRAINTS                                │
+  │ • Focus on margin expansion and retention. │
+  │ • Cut low-leverage experiments.            │
+  │ • Convert demand with tighter sales cycles.│
+  │                                            │
+  │ Source: US Treasury Fiscal Data API        │
+  └────────────────────────────────────────────┘
+  ```
+</Frame>
+
+<Check>
+  Leadership decks demand concise, jargon-free summaries. Briefing Pack constraints are pre-filtered to the top 3 most actionable items.
+</Check>
+
+## Citations and Timestamps
+
+Every export includes:
+
+1. **Record date**: The Treasury data snapshot date (e.g., `2024-03-15`)
+2. **Source URL**: Direct link to US Treasury Fiscal Data API
+3. **Fetched timestamp**: When Whether last pulled data
+
+```typescript lib/regimeEngine.ts
+export interface RegimeInput {
+  id: "base-rate" | "two-year" | "ten-year" | "curve-slope";
+  label: string;
+  value: number | null;
+  unit: string;
+  sourceLabel: string;                    // "US Treasury Fiscal Data API"
+  sourceUrl: string;                      // Full API URL
+  recordDate: string;                     // ISO date of Treasury snapshot
+  fetchedAt: string;                      // ISO timestamp of Whether fetch
+  derivedFrom?: string;                   // For calculated metrics
+  notes?: string;                         // Data quality warnings
+}
+```
+
+<CodeGroup>
+```typescript Citation Example
+{
+  sourceLabel: "US Treasury Fiscal Data API",
+  sourceUrl: "https://fiscaldata.treasury.gov/datasets/average-interest-rates-treasury-securities/average-interest-rates-treasury-securities",
+  recordDate: "2024-03-15",
+  fetchedAt: "2024-03-16T08:12:34Z"
+}
+```
+
+```markdown Markdown Citation
+Source: [US Treasury Fiscal Data API](https://fiscaldata.treasury.gov/datasets/...)
+Record date: 2024-03-15
+Fetched: 2024-03-16 08:12:34 UTC
+```
+</CodeGroup>
+
+<Warning>
+  Always include citations in exported briefs. This ensures stakeholders can verify source data and understand staleness.
+</Warning>
+
+## Copy-Ready Leadership Briefs
+
+Briefing Pack markdown is designed for zero-edit copy-paste:
+
+```typescript
+import { buildWeeklyMandateEnvelope } from "@/lib/integrationBriefs";
+
+const assessment = evaluateRegime(treasury);
+const envelope = buildWeeklyMandateEnvelope(assessment, treasury);
+
+// Copy to clipboard (browser)
+navigator.clipboard.writeText(envelope.markdown);
+
+// Or log for terminal copy
+console.log(envelope.markdown);
+```
+
+<Accordion title="Full Markdown Output Example" icon="markdown">
+  ```markdown
+  ## Whether weekly mandate — 2024-03-15
+  DEFENSIVE: Tightness 72/100, Risk appetite 52/100.
+
+  ### Constraints
+  - Focus on margin expansion and retention.
+  - Cut low-leverage experiments.
+  - Convert demand with tighter sales cycles.
+
+  Source: https://fiscaldata.treasury.gov/datasets/average-interest-rates-treasury-securities/average-interest-rates-treasury-securities
+  ```
+</Accordion>
+
+<Tip>
+  Add a "Copy Brief" button to your UI that calls `navigator.clipboard.writeText(envelope.markdown)`. Users love one-click workflows.
+</Tip>
+
+## Usage Example
+
+```typescript
+import { evaluateRegime } from "@/lib/regimeEngine";
+import { buildWeeklyMandatePayload, buildWeeklyMandateEnvelope } from "@/lib/integrationBriefs";
+import type { IntegrationTarget } from "@/lib/integrationBriefs";
+
+// Fetch current regime
+const treasury = await fetchTreasuryYields();
+const assessment = evaluateRegime(treasury);
+
+// Generate Slack payload
+const slackPayload = buildWeeklyMandatePayload("slack", assessment, treasury);
+await postToSlack(slackPayload);
+
+// Generate Notion entry
+const notionPayload = buildWeeklyMandatePayload("notion", assessment, treasury);
+await createNotionPage(notionPayload);
+
+// Generate Linear issue
+const linearPayload = buildWeeklyMandatePayload("linear", assessment, treasury);
+await createLinearIssue(linearPayload);
+
+// Generate copy-ready markdown
+const envelope = buildWeeklyMandateEnvelope(assessment, treasury);
+console.log(envelope.markdown);
+
+// Copy to clipboard for slide deck
+navigator.clipboard.writeText(envelope.markdown);
+```
+
+<Steps>
+  <Step title="Generate assessment">
+    Run `evaluateRegime(treasury)` to get current regime state
+  </Step>
+  <Step title="Choose target(s)">
+    Select one or more integration targets: Slack, Notion, Linear
+  </Step>
+  <Step title="Build payload(s)">
+    Call `buildWeeklyMandatePayload(target, assessment, treasury)` for each
+  </Step>
+  <Step title="Deliver">
+    Post payloads to respective APIs or copy markdown to clipboard
+  </Step>
+</Steps>
+
+## Export Automation
+
+Briefing Pack is designed for cron-based automation:
+
+```typescript
+// Weekly Monday morning digest
+cron.schedule("0 8 * * 1", async () => {  // 8am every Monday
+  const treasury = await fetchTreasuryYields();
+  const assessment = evaluateRegime(treasury);
+  
+  // Post to Slack #planning
+  const slackPayload = buildWeeklyMandatePayload("slack", assessment, treasury);
+  await postToSlack(slackPayload);
+  
+  // Update Notion database
+  const notionPayload = buildWeeklyMandatePayload("notion", assessment, treasury);
+  await createNotionPage(notionPayload);
+  
+  console.log(`Weekly mandate delivered: ${assessment.regime}`);
+});
+```
+
+<Info>
+  Combine Briefing Pack with [Signal Ops](/features/signal-ops) alerts for event-driven updates: send briefs only when regimes change.
+</Info>
+
+## PDF Report Generation
+
+*(Implementation example using `jspdf` or similar)*
+
+```typescript
+import { jsPDF } from "jspdf";
+import { buildWeeklyMandateEnvelope } from "@/lib/integrationBriefs";
+
+const generatePDF = (assessment: RegimeAssessment, treasury: TreasuryData) => {
+  const envelope = buildWeeklyMandateEnvelope(assessment, treasury);
+  const doc = new jsPDF();
+  
+  doc.setFontSize(18);
+  doc.text(envelope.title, 10, 10);
+  
+  doc.setFontSize(12);
+  doc.text(envelope.summary, 10, 20);
+  
+  doc.setFontSize(14);
+  doc.text("Constraints", 10, 35);
+  
+  envelope.constraints.forEach((constraint, i) => {
+    doc.text(`• ${constraint}`, 15, 45 + (i * 10));
+  });
+  
+  doc.setFontSize(10);
+  doc.text(`Source: ${treasury.source}`, 10, 85);
+  
+  return doc.output("blob");
+};
+
+// Download PDF
+const pdfBlob = generatePDF(assessment, treasury);
+const url = URL.createObjectURL(pdfBlob);
+const a = document.createElement("a");
+a.href = url;
+a.download = "whether-weekly-mandate.pdf";
+a.click();
+```
+
+<Note>
+  PDF generation is optional but useful for offline stakeholder reviews or board packets.
+</Note>
+
+## Related Features
+
+<CardGroup cols={2}>
+  <Card title="Regime Engine" icon="gauge-high" href="/features/regime-engine">
+    Understand regime data included in briefs
+  </Card>
+  <Card title="Decision Shield" icon="shield-check" href="/features/decision-shield">
+    Include decision verdicts in stakeholder updates
+  </Card>
+  <Card title="Signal Ops" icon="bell" href="/features/signal-ops">
+    Trigger briefs on regime change alerts
+  </Card>
+  <Card title="Time Machine" icon="clock-rotate-left" href="/features/time-machine">
+    Export historical regime comparisons
+  </Card>
+</CardGroup>

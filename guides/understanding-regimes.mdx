@@ -1,0 +1,247 @@
+---
+title: Understanding Regimes
+description: Deep dive into regime classification, scoring mechanics, and operational implications
+---
+
+Whether classifies market conditions into four distinct **regimes** by evaluating two core dimensions: **tightness** (cost of capital) and **risk appetite** (investor confidence). Each regime maps directly to operational constraints that guide your team's decisions.
+
+## The Four Regimes
+
+### SCARCITY
+
+**Condition:** Capital is expensive (tightness > 70) **and** risk appetite is low (≤ 50).
+
+**Description:** Capital is expensive and risk appetite is low. Prioritize survival over growth.
+
+**Operational constraints:**
+- Shorten payback windows and preserve cash
+- Delay speculative hiring or large platform rewrites
+- Route roadmap bets through revenue certainty
+
+<Warning>
+SCARCITY conditions require defensive posture. Avoid capital-intensive bets until regime transitions.
+</Warning>
+
+---
+
+### DEFENSIVE
+
+**Condition:** Capital is expensive (tightness > 70) **but** risk appetite is moderate (> 50).
+
+**Description:** Capital is expensive but risk appetite is moderate. Operate for efficiency.
+
+**Operational constraints:**
+- Focus on margin expansion and retention
+- Cut low-leverage experiments
+- Convert demand with tighter sales cycles
+
+---
+
+### VOLATILE
+
+**Condition:** Capital is cheaper (tightness ≤ 70) **but** risk appetite is weak (≤ 50).
+
+**Description:** Capital is cheaper but risk appetite is weak. Build trust and resilience.
+
+**Operational constraints:**
+- Ship reliability and security before novelty
+- Avoid disruptive pivots that spook buyers
+- Lean into proof, references, and guarantees
+
+---
+
+### EXPANSION
+
+**Condition:** Capital is cheap (tightness ≤ 70) **and** risk appetite is healthy (> 50).
+
+**Description:** Capital is cheap and risk appetite is healthy. Move quickly to capture share.
+
+**Operational constraints:**
+- Prioritize speed and distribution over polish
+- Accept controlled waste to win market share
+- Invest ahead of demand where signals are strong
+
+<Note>
+EXPANSION is the ideal growth window. Time product launches and hiring accelerations to these conditions.
+</Note>
+
+---
+
+## Regime Scoring Mechanics
+
+### Tightness Score (0–100)
+
+Tightness measures the **cost of capital** by blending two components:
+
+1. **Base rate points** (0–90): Ramps from 0 when the policy base rate is at or below **5%**, reaching 90 as rates climb above the threshold. Calculated as:
+   ```
+   baseRatePoints = clamp((baseRate - 5%) × 180, 0, 90)
+   ```
+
+2. **Inversion points** (0–25): Adds penalty when the yield curve inverts (10Y - 2Y slope < 0%). Calculated as:
+   ```
+   inversionPoints = clamp(|curveSlope| × 50, 0, 25)
+   ```
+
+**Total tightness** is capped at 100:
+```
+tightness = clamp(baseRatePoints + inversionPoints, 0, 100)
+```
+
+**Threshold:** Tightness above **70** signals expensive capital conditions (SCARCITY or DEFENSIVE regimes).
+
+---
+
+### Risk Appetite Score (0–100)
+
+Risk appetite measures **investor confidence** by normalizing the yield curve slope:
+
+```
+riskAppetite = clamp((curveSlope - (-1.0%)) / (1.5% - (-1.0%)) × 100, 0, 100)
+```
+
+- **Curve slope range:** -1.0% (very cautious) to +1.5% (confident)
+- **Interpretation:**
+  - **Low (≤ 50):** Investors favor safety; cautious market sentiment
+  - **High (> 50):** Investors accept risk; growth-friendly sentiment
+
+**Threshold:** Risk appetite above **50** signals healthy investor confidence (DEFENSIVE or EXPANSION regimes).
+
+---
+
+## Macro Adjustments
+
+The base scores are adjusted by supplemental signals when available:
+
+| Signal | Threshold | Impact | Category |
+|--------|-----------|--------|----------|
+| **HY Credit Spread** | ≥ 4.5% | +6 pts/% tightness (cap: +15) | Stress indicator |
+| **Chicago FCI** | ≥ 0 | +10 pts/unit tightness (cap: +10) | Financial conditions |
+| **VIX Index** | ≥ 20 | -1.5 pts/pt risk appetite (cap: -20) | Volatility shock |
+| **VC Funding Velocity** | ≤ -5% | -1.5 pts/% risk appetite (cap: -10) | Funding slowdown |
+| **Tech Layoff Trend** | ≥ 65 | -0.6 pts/pt risk appetite (cap: -12) | Labor pressure |
+
+<Note>
+Macro adjustments are applied **after** base scoring. They flag stress conditions that amplify regime signals.
+</Note>
+
+---
+
+## Regime Thresholds and Boundaries
+
+The regime classification matrix uses these thresholds:
+
+```typescript
+DEFAULT_THRESHOLDS = {
+  baseRateTightness: 5,        // Base rate % threshold
+  tightnessRegime: 70,         // Tightness score threshold
+  riskAppetiteRegime: 50,      // Risk appetite score threshold
+}
+```
+
+**Classification logic** (from `regimeEngine.ts:324`):
+
+```typescript
+if (tightness > 70 && riskAppetite <= 50) return "SCARCITY";
+if (tightness > 70 && riskAppetite > 50) return "DEFENSIVE";
+if (tightness <= 70 && riskAppetite <= 50) return "VOLATILE";
+return "EXPANSION";
+```
+
+---
+
+## Transition Watch and Confidence Levels
+
+### Confidence Index
+
+Whether computes regime stability using the **nearest threshold delta** (minimum distance to any regime boundary):
+
+- **HIGH:** Delta ≥ 20 points from nearest threshold
+- **MEDIUM:** Delta between 10–19 points
+- **LOW:** Delta < 10 points
+
+**Example:**
+```
+Tightness: 75 (delta from 70 threshold: +5)
+Risk Appetite: 48 (delta from 50 threshold: -2)
+
+Nearest threshold delta: min(5, 2) = 2 → Confidence: LOW
+```
+
+---
+
+### Transition Watch
+
+Transition watch activates when **nearest threshold delta ≤ 5 points**. This signals the regime may flip soon.
+
+<Warning>
+**Transition watch active:** Defer irreversible decisions until regime stabilizes for 30 consecutive days.
+</Warning>
+
+---
+
+### Intensity Bands
+
+Intensity measures how strongly a regime signal presents:
+
+- **STRONG:** Delta ≥ 25 points from threshold
+- **STANDARD:** Delta between 10–24 points
+- **MILD:** Delta < 10 points
+
+**Operational impact:**
+- **STRONG signals:** High conviction; act decisively within regime constraints
+- **MILD signals:** Prepare for transition; maintain reversibility
+
+---
+
+## Reversal Triggers
+
+Regimes require **30 consecutive days** of threshold crossings to confirm a reversal. Use these triggers to schedule decision reviews:
+
+| Current Regime | Reversal Condition |
+|----------------|--------------------|
+| **SCARCITY** | Tightness drops below 70 **and** risk appetite rises above 50 |
+| **DEFENSIVE** | Tightness drops below 70 **or** risk appetite falls to/below 50 |
+| **VOLATILE** | Tightness rises above 70 **or** risk appetite rises above 50 |
+| **EXPANSION** | Tightness rises above 70 **or** risk appetite falls to/below 50 |
+
+---
+
+## Weak Reads Warning
+
+When **2+ macro adjustment signals** trigger simultaneously, Whether flags a "two weak reads warning" (`regimeEngine.ts:142`).
+
+<Warning>
+**Two weak reads detected:** Multiple stress indicators active. Regime confidence may be fragile.
+</Warning>
+
+This warning suggests:
+- Cross-check with historical transitions (see [Historical Analysis](/guides/historical-analysis))
+- Tighten decision guardrails (see [Making Decisions](/guides/making-decisions))
+- Monitor daily until signals stabilize
+
+---
+
+## Data Warnings
+
+Whether reports data quality issues transparently:
+
+- **Base rate missing:** Falls back to 5% threshold for conservative scoring
+- **Curve slope missing:** Defaults to -1.0% (cautious floor)
+
+<Note>
+Data warnings appear in the `/data` endpoint and regime assessment diagnostics. Missing signals reduce confidence.
+</Note>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Making Decisions" icon="shield-check" href="/guides/making-decisions">
+    Validate roadmap and operational decisions using Decision Shield
+  </Card>
+  <Card title="Historical Analysis" icon="clock-rotate-left" href="/guides/historical-analysis">
+    Compare current regime to past transitions using Time Machine
+  </Card>
+</CardGroup>

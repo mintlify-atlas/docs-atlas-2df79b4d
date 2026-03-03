@@ -1,0 +1,413 @@
+---
+title: Alerts and Notifications
+description: Configure regime-change alerts and weekly digests to stay informed on market conditions
+---
+
+Whether's alerting system notifies your team when regime conditions shift, helping you catch transitions early and respond before market misalignment compounds risk.
+
+## Alert Types
+
+Whether supports two alert types:
+
+1. **Regime-change alerts:** Immediate notifications when thresholds cross and regimes flip
+2. **Weekly digests:** Summary of regime activity, score deltas, and transition trends
+
+---
+
+## Configuring Regime-Change Alerts
+
+Regime-change alerts trigger when **any of these events occur**:
+
+| Event Code | Trigger Condition |
+|------------|-------------------|
+| `regime-change` | Regime classification changes (e.g., DEFENSIVE → SCARCITY) |
+| `tightness-upshift` | Tightness crosses above 70 threshold |
+| `tightness-downshift` | Tightness falls below 70 threshold |
+| `risk-appetite-upshift` | Risk appetite crosses above 50 threshold |
+| `risk-appetite-downshift` | Risk appetite falls below 50 threshold |
+
+<Note>
+**Threshold crossings without regime change** still trigger alerts. Example: Tightness moves from 68 → 72 in VOLATILE (no regime flip), but `tightness-upshift` alert fires.
+</Note>
+
+---
+
+### Alert Cooldown Period
+
+To prevent alert fatigue, Whether enforces a **24-hour cooldown** between alerts. A new alert fires only if:
+
+1. **24+ hours** have passed since the last alert, **OR**
+2. The **regime flipped again** (e.g., SCARCITY → DEFENSIVE → SCARCITY)
+
+**Example:**
+- **Day 1, 9:00 AM:** Tightness crosses 70 → Alert fires
+- **Day 1, 3:00 PM:** Risk appetite crosses 50 → Alert **suppressed** (within 24-hour window)
+- **Day 2, 10:00 AM:** Regime flips DEFENSIVE → SCARCITY → Alert fires (regime change overrides cooldown)
+
+---
+
+## Understanding Reason Codes
+
+Each alert includes **reason codes** explaining what triggered the notification:
+
+### Core Reason Codes
+
+| Code | Meaning | Example |
+|------|---------|----------|
+| `regime-change` | Regime classification flipped | "Regime shifted from DEFENSIVE to SCARCITY." |
+| `tightness-upshift` | Tightness crossed above threshold | "Tightness crossed above 70." |
+| `tightness-downshift` | Tightness dropped below threshold | "Tightness fell below 70." |
+| `risk-appetite-upshift` | Risk appetite crossed above threshold | "Risk appetite crossed above 50." |
+| `risk-appetite-downshift` | Risk appetite dropped below threshold | "Risk appetite fell below 50." |
+| `base-rate-upshift` | Base rate crossed above 5% | "Base rate crossed above 5.0%." |
+| `base-rate-downshift` | Base rate dropped below 5% | "Base rate fell below 5.0%." |
+| `curve-slope-negative` | Yield curve inverted | "Curve slope turned negative." |
+| `curve-slope-positive` | Yield curve steepened | "Curve slope turned positive." |
+| `signals-updated` | Data refreshed but no thresholds crossed | "Signal values updated since the last read." |
+
+### Interpreting Multiple Reason Codes
+
+Alerts may include **multiple reason codes** when several thresholds cross simultaneously:
+
+**Example alert payload:**
+```json
+{
+  "reasons": [
+    { "code": "regime-change", "message": "Regime shifted from DEFENSIVE to SCARCITY." },
+    { "code": "risk-appetite-downshift", "message": "Risk appetite fell below 50." },
+    { "code": "curve-slope-negative", "message": "Curve slope turned negative." }
+  ]
+}
+```
+
+**Interpretation:**
+- Regime flipped due to **risk appetite dropping below 50**
+- Yield curve **inverted** in the same update
+- This is a **compound transition** (multiple signals deteriorating)
+
+<Warning>
+Alerts with **3+ reason codes** signal volatile conditions. Tighten decision guardrails and increase monitoring frequency.
+</Warning>
+
+---
+
+## Role-Based Alert Routing
+
+Route alerts to different teams based on role and decision authority:
+
+<Steps>
+  <Step title="Define alert roles">
+    Configure roles in your alert settings:
+
+    - **Executives:** Regime-change alerts only (high-level strategy)
+    - **Finance:** All tightness/base rate shifts (capital planning)
+    - **Product/Eng:** Risk appetite shifts + weekly digests (roadmap timing)
+    - **Operations:** Weekly digests only (planning cycles)
+  </Step>
+
+  <Step title="Set channel preferences">
+    Choose delivery channels per role:
+
+    | Role | Slack | Email | Webhook |
+    |------|-------|-------|----------|
+    | Executives | ✅ | ✅ | ❌ |
+    | Finance | ✅ | ❌ | ✅ (ERP integration) |
+    | Product/Eng | ✅ | ❌ | ❌ |
+    | Operations | ❌ | ✅ | ❌ |
+  </Step>
+
+  <Step title="Configure routing rules">
+    Example routing configuration:
+
+    ```typescript
+    const alertRouting = {
+      "regime-change": ["executives", "finance", "product"],
+      "tightness-upshift": ["finance", "executives"],
+      "risk-appetite-downshift": ["product", "executives"],
+      "signals-updated": [], // No alerts for routine updates
+    };
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Slack Alerts
+
+### Setup
+
+<Steps>
+  <Step title="Install Whether Slack app">
+    Navigate to `/settings/integrations` and click **Add to Slack**.
+  </Step>
+
+  <Step title="Authorize workspace access">
+    Grant Whether permission to post to channels and send DMs.
+  </Step>
+
+  <Step title="Choose alert channel">
+    Select a channel for regime alerts (e.g., `#regime-station` or `#finance`).
+  </Step>
+
+  <Step title="Test alert">
+    Click **Send Test Alert** to confirm delivery.
+  </Step>
+</Steps>
+
+---
+
+### Slack Alert Format
+
+Alerts appear as rich message blocks with inline actions:
+
+```
+🚨 Regime Change Alert
+
+Regime shifted from DEFENSIVE to SCARCITY (2026-03-03)
+
+• Tightness: 78 → 82 (+4 pts)
+• Risk Appetite: 52 → 48 (-4 pts)
+
+Reasons:
+• regime-change: Regime shifted from DEFENSIVE to SCARCITY.
+• risk-appetite-downshift: Risk appetite fell below 50.
+
+[View Dashboard] [Compare to History] [Snooze Alerts]
+```
+
+**Interactive buttons:**
+- **View Dashboard:** Opens Whether UI to current regime view
+- **Compare to History:** Launches Time Machine with current date pre-selected
+- **Snooze Alerts:** Pauses alerts for 24 hours
+
+---
+
+## Email Alerts
+
+### Setup
+
+<Steps>
+  <Step title="Add email recipients">
+    Navigate to `/settings/alerts` and add email addresses under **Email Recipients**.
+  </Step>
+
+  <Step title="Choose alert frequency">
+    - **Immediate:** Send on every regime-change event (default)
+    - **Daily digest:** Batch all alerts into a single email sent at 9:00 AM
+  </Step>
+
+  <Step title="Test alert">
+    Click **Send Test Email** to confirm delivery.
+  </Step>
+</Steps>
+
+---
+
+### Email Alert Format
+
+Emails include:
+- Plain-text summary of regime change
+- Reason codes and score deltas
+- Link to Whether dashboard
+- Attached CSV with full assessment data
+
+**Subject line format:**
+```
+[Whether] Regime change: DEFENSIVE → SCARCITY (2026-03-03)
+```
+
+---
+
+## Webhook Alerts
+
+Webhooks allow you to integrate regime alerts with custom systems (e.g., PagerDuty, Datadog, internal dashboards).
+
+### Setup
+
+<Steps>
+  <Step title="Generate webhook URL">
+    Navigate to `/settings/integrations` → **Webhooks** → **Create Webhook**.
+  </Step>
+
+  <Step title="Configure endpoint">
+    Provide:
+    - **Endpoint URL:** Your receiving server
+    - **Secret:** Shared secret for HMAC signature verification
+    - **Event filters:** Choose which reason codes trigger webhooks
+  </Step>
+
+  <Step title="Test webhook">
+    Click **Send Test Payload** to confirm receipt.
+  </Step>
+</Steps>
+
+---
+
+### Webhook Payload Structure
+
+```json
+{
+  "event": "regime.changed",
+  "timestamp": "2026-03-03T14:32:00Z",
+  "data": {
+    "alertId": "alert_abc123",
+    "previousRegime": "DEFENSIVE",
+    "currentRegime": "SCARCITY",
+    "previousRecordDate": "2026-03-02",
+    "currentRecordDate": "2026-03-03",
+    "scores": {
+      "tightness": { "previous": 78, "current": 82, "delta": 4 },
+      "riskAppetite": { "previous": 52, "current": 48, "delta": -4 }
+    },
+    "reasons": [
+      { "code": "regime-change", "message": "Regime shifted from DEFENSIVE to SCARCITY." },
+      { "code": "risk-appetite-downshift", "message": "Risk appetite fell below 50." }
+    ],
+    "sourceUrls": [
+      "https://api.fiscaldata.treasury.gov/..."
+    ],
+    "dashboardUrl": "https://regime.yourcompany.com/dashboard",
+    "timeMachineUrl": "https://regime.yourcompany.com/time-machine?date=2026-03-03"
+  }
+}
+```
+
+### Verifying Webhook Signatures
+
+```typescript
+import crypto from "crypto";
+
+function verifyWebhookSignature(payload: string, signature: string, secret: string): boolean {
+  const expectedSignature = crypto
+    .createHmac("sha256", secret)
+    .update(payload)
+    .digest("hex");
+  return crypto.timingSafeEqual(
+    Buffer.from(signature),
+    Buffer.from(expectedSignature)
+  );
+}
+
+// Example Express handler
+app.post("/webhooks/whether", (req, res) => {
+  const signature = req.headers["x-whether-signature"];
+  const payload = JSON.stringify(req.body);
+
+  if (!verifyWebhookSignature(payload, signature, process.env.WHETHER_WEBHOOK_SECRET)) {
+    return res.status(401).send("Invalid signature");
+  }
+
+  // Process alert
+  const alert = req.body;
+  console.log(`Regime changed: ${alert.data.currentRegime}`);
+  res.status(200).send("OK");
+});
+```
+
+---
+
+## Weekly Digest Setup
+
+Weekly digests summarize regime activity over the past 7 days.
+
+### Setup
+
+<Steps>
+  <Step title="Enable weekly digest">
+    Navigate to `/settings/alerts` → **Weekly Digest** → **Enable**.
+  </Step>
+
+  <Step title="Choose delivery day and time">
+    - **Day:** Monday (recommended for planning cycles)
+    - **Time:** 9:00 AM (team's local timezone)
+  </Step>
+
+  <Step title="Select recipients">
+    Add email addresses or Slack channels for digest delivery.
+  </Step>
+
+  <Step title="Test digest">
+    Click **Send Test Digest** to preview format.
+  </Step>
+</Steps>
+
+---
+
+### Digest Content
+
+Digests include:
+
+1. **Current regime summary:** Latest regime + scores as of digest date
+2. **Score deltas:** Tightness and risk appetite change over 7 days
+3. **Alert history:** All reason codes triggered during the week
+4. **Transition watch:** Flag if regime is near threshold boundaries
+5. **Links:** Dashboard, Time Machine, and decision validation pages
+
+**Example digest:**
+
+```
+Whether Weekly Digest — March 3, 2026
+
+Current Regime: SCARCITY (as of 2026-03-03)
+
+Score Changes (past 7 days):
+• Tightness: 75 → 82 (+7 pts)
+• Risk Appetite: 55 → 48 (-7 pts)
+
+Alerts This Week:
+• regime-change: Regime shifted from DEFENSIVE to SCARCITY.
+• risk-appetite-downshift: Risk appetite fell below 50.
+• curve-slope-negative: Curve slope turned negative.
+
+Transition Watch: ❌ (confidence: HIGH, no boundary proximity)
+
+[View Dashboard] [Time Machine] [Review Decisions]
+```
+
+---
+
+## Alert Delivery Status
+
+Track alert delivery success in the `/settings/alerts` dashboard:
+
+| Alert ID | Channel | Status | Delivered At | Summary |
+|----------|---------|--------|--------------|----------|
+| `alert_001` | Slack | ✅ Sent | 2026-03-03 14:32 | SCARCITY (2026-03-03) · regime-change |
+| `alert_002` | Email | ✅ Sent | 2026-03-03 14:32 | SCARCITY (2026-03-03) · regime-change |
+| `alert_003` | Webhook | ❌ Failed | — | Connection timeout |
+
+**Retry logic:**
+- Slack/Email: 3 retries with exponential backoff
+- Webhooks: 5 retries over 24 hours
+
+---
+
+## Alert Best Practices
+
+<Warning>
+**Avoid alert fatigue:**
+- Route `signals-updated` reason code to monitoring systems only (not humans)
+- Use weekly digests for operational teams; save immediate alerts for decision-makers
+- Tune cooldown periods if you receive >5 alerts/day
+</Warning>
+
+<Note>
+**Effective alert workflows:**
+1. **Immediate Slack alerts** → CFO, VP Product (regime-change only)
+2. **Daily email digests** → Finance team (all tightness/base rate events)
+3. **Weekly digest** → Entire product/eng org (Sunday night before planning)
+4. **Webhook integration** → PagerDuty (DANGEROUS verdicts + regime-change)
+</Note>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Exporting Briefs" icon="file-export" href="/guides/exporting-briefs">
+    Generate leadership summaries and share regime context with stakeholders
+  </Card>
+  <Card title="Making Decisions" icon="shield-check" href="/guides/making-decisions">
+    Use regime alerts to trigger decision re-validation workflows
+  </Card>
+</CardGroup>

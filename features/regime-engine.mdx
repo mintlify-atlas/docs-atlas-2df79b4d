@@ -1,0 +1,297 @@
+---
+title: 'Regime Engine'
+description: 'Classify macro conditions into four operational regimes based on capital tightness and market risk appetite'
+icon: 'gauge-high'
+---
+
+## Overview
+
+The **Regime Engine** is Whether's core classification system. It transforms Treasury yield data into actionable regime assessments by scoring two dimensions:
+
+<CardGroup cols={2}>
+  <Card title="Tightness" icon="lock">
+    Measures capital cost via base rates and yield curve inversion
+  </Card>
+  <Card title="Risk Appetite" icon="chart-line">
+    Gauges market confidence from yield curve slope
+  </Card>
+</CardGroup>
+
+These scores map to **four distinct regimes**, each with specific operational constraints.
+
+## Four Regime Types
+
+The engine classifies conditions using threshold-based rules. Each regime comes from real production data:
+
+<AccordionGroup>
+  <Accordion title="SCARCITY" icon="triangle-exclamation" iconType="solid">
+    **High tightness (>70), Low risk appetite (≤50)**
+
+    > Capital is expensive and risk appetite is low. Prioritize survival over growth.
+
+    **Operational Constraints:**
+    - Shorten payback windows and preserve cash.
+    - Delay speculative hiring or large platform rewrites.
+    - Route roadmap bets through revenue certainty.
+
+    <Note>
+      SCARCITY regimes demand maximum capital efficiency. Focus on survival metrics and proven revenue streams.
+    </Note>
+  </Accordion>
+
+  <Accordion title="DEFENSIVE" icon="shield" iconType="solid">
+    **High tightness (>70), Moderate risk appetite (>50)**
+
+    > Capital is expensive but risk appetite is moderate. Operate for efficiency.
+
+    **Operational Constraints:**
+    - Focus on margin expansion and retention.
+    - Cut low-leverage experiments.
+    - Convert demand with tighter sales cycles.
+
+    <Tip>
+      DEFENSIVE regimes allow selective execution. Prioritize margin improvements over growth at all costs.
+    </Tip>
+  </Accordion>
+
+  <Accordion title="VOLATILE" icon="wave-pulse" iconType="solid">
+    **Low tightness (≤70), Low risk appetite (≤50)**
+
+    > Capital is cheaper but risk appetite is weak. Build trust and resilience.
+
+    **Operational Constraints:**
+    - Ship reliability and security before novelty.
+    - Avoid disruptive pivots that spook buyers.
+    - Lean into proof, references, and guarantees.
+
+    <Warning>
+      VOLATILE regimes create mixed signals. Capital is available but buyers are cautious—focus on trust-building.
+    </Warning>
+  </Accordion>
+
+  <Accordion title="EXPANSION" icon="rocket" iconType="solid">
+    **Low tightness (≤70), High risk appetite (>50)**
+
+    > Capital is cheap and risk appetite is healthy. Move quickly to capture share.
+
+    **Operational Constraints:**
+    - Prioritize speed and distribution over polish.
+    - Accept controlled waste to win market share.
+    - Invest ahead of demand where signals are strong.
+
+    <Check>
+      EXPANSION regimes are rare windows for aggressive growth. Maximize distribution and market capture velocity.
+    </Check>
+  </Accordion>
+</AccordionGroup>
+
+## Scoring Formulas
+
+### Tightness Score
+
+Tightness combines base rate pressure and yield curve inversion, capped at 100:
+
+```typescript lib/regimeEngine.ts
+export const computeTightnessScore = (
+  baseRate: number,
+  curveSlope: number,
+  baseRateThreshold: number
+) => {
+  const baseRatePoints = clamp(
+    Math.round((baseRate - baseRateThreshold) * 180),
+    0,
+    90  // TIGHTNESS_BASE_RATE_POINTS
+  );
+  const inversionPoints =
+    curveSlope < 0
+      ? clamp(
+          Math.round(Math.abs(curveSlope) * 50),
+          0,
+          25  // TIGHTNESS_INVERSION_POINTS
+        )
+      : 0;
+  const score = baseRatePoints + inversionPoints;
+
+  return clamp(score, 0, 100);
+};
+```
+
+<Steps>
+  <Step title="Base Rate Component">
+    Ramps from **0 to 90 points** as rates exceed 5% threshold (default)
+    
+    Formula: `(baseRate - 5.0) × 180`, capped at 90
+  </Step>
+  <Step title="Inversion Component">
+    Adds **0 to 25 points** when 10Y-2Y slope turns negative
+    
+    Formula: `|curveSlope| × 50`, capped at 25
+  </Step>
+  <Step title="Final Cap">
+    Total score capped at **100** for consistency across regimes
+  </Step>
+</Steps>
+
+### Risk Appetite Score
+
+Risk appetite maps yield curve slope to a 0-100 scale:
+
+```typescript lib/regimeEngine.ts
+export const computeRiskAppetiteScore = (curveSlope: number) => {
+  const normalized =
+    (curveSlope - (-1.0)) / (1.5 - (-1.0));  // Min: -1.0%, Max: 1.5%
+  return clamp(Math.round(normalized * 100), 0, 100);
+};
+```
+
+<Frame caption="Risk Appetite Mapping">
+  ```
+  Curve Slope (10Y-2Y)   →   Risk Appetite Score
+  ───────────────────────────────────────────────
+   -1.0% (inverted)      →   0   (very cautious)
+    0.0% (flat)          →   40  (uncertain)
+   +1.5% (steep)         →   100 (confident)
+  ```
+</Frame>
+
+## Classification Logic
+
+Regime classification uses deterministic thresholds:
+
+```typescript lib/regimeEngine.ts
+export const classifyRegime = (
+  tightness: number,
+  riskAppetite: number,
+  thresholds: RegimeThresholds
+): RegimeKey => {
+  if (tightness > thresholds.tightnessRegime && riskAppetite <= thresholds.riskAppetiteRegime) {
+    return "SCARCITY";
+  }
+  if (tightness > thresholds.tightnessRegime && riskAppetite > thresholds.riskAppetiteRegime) {
+    return "DEFENSIVE";
+  }
+  if (tightness <= thresholds.tightnessRegime && riskAppetite <= thresholds.riskAppetiteRegime) {
+    return "VOLATILE";
+  }
+  return "EXPANSION";
+};
+```
+
+### Default Thresholds
+
+<CodeGroup>
+```typescript Configuration
+export const DEFAULT_THRESHOLDS: RegimeThresholds = {
+  baseRateTightness: 5,      // Base rate threshold (5%)
+  tightnessRegime: 70,       // Tightness regime split
+  riskAppetiteRegime: 50,    // Risk appetite regime split
+};
+```
+
+```typescript Types
+export interface RegimeThresholds {
+  baseRateTightness: number;   // When base rates signal "expensive"
+  tightnessRegime: number;     // Tightness score regime boundary
+  riskAppetiteRegime: number;  // Risk appetite score regime boundary
+}
+```
+</CodeGroup>
+
+<Info>
+  Thresholds are configurable via the `evaluateRegime()` function's optional `overrides` parameter.
+</Info>
+
+## Real Assessment Output
+
+The engine produces comprehensive regime assessments:
+
+```typescript lib/regimeEngine.ts
+export interface RegimeAssessment {
+  regime: RegimeKey;                      // SCARCITY | DEFENSIVE | VOLATILE | EXPANSION
+  scores: RegimeScores;                   // Tightness & risk appetite scores
+  diagnostics: RegimeDiagnostics;         // Confidence, intensity, transition watch
+  description: string;                    // Plain-English regime summary
+  constraints: string[];                  // Operational guidance (3 bullets)
+  tightnessExplanation: string;           // Scoring formula explanation
+  riskAppetiteExplanation: string;        // Scoring formula explanation
+  dataWarnings: string[];                 // Missing data alerts
+  thresholds: RegimeThresholds;           // Active threshold configuration
+  inputs: RegimeInput[];                  // Source data with citations
+  policyAssessment: PolicyAssessment;     // Advanced policy posture (v1.0.0)
+}
+```
+
+<CodeGroup>
+```typescript Scores
+export interface RegimeScores {
+  tightness: number;                      // 0-100 tightness score
+  riskAppetite: number;                   // 0-100 risk appetite score
+  baseRateUsed: "1M" | "3M" | "MISSING";  // Which rate anchored scoring
+  baseRate: number;                       // Actual base rate value (%)
+  curveSlope: number | null;              // 10Y-2Y spread (%)
+}
+```
+
+```typescript Diagnostics
+export type RegimeDiagnostics = {
+  tightnessDelta: number;                 // Distance from tightness threshold
+  riskAppetiteDelta: number;              // Distance from risk appetite threshold
+  nearestThresholdDelta: number;          // Closest boundary distance
+  confidence: "LOW" | "MEDIUM" | "HIGH";  // Classification confidence
+  transitionWatch: boolean;               // Near regime boundary (≤5 points)
+  intensity: "MILD" | "STANDARD" | "STRONG"; // Regime strength
+  boundaryContributors: string[];         // Macro adjustments applied
+  weakReadCount: number;                  // Count of weak signals
+  twoWeakReadsWarning: boolean;           // ≥2 weak reads flag
+};
+```
+</CodeGroup>
+
+## Usage Example
+
+```typescript
+import { evaluateRegime } from "@/lib/regimeEngine";
+import type { TreasuryData } from "@/lib/types";
+
+// Fetch current Treasury yields
+const treasury: TreasuryData = await fetchTreasuryYields();
+
+// Classify regime with default thresholds
+const assessment = evaluateRegime(treasury);
+
+console.log(`Current regime: ${assessment.regime}`);
+console.log(`Tightness: ${assessment.scores.tightness}/100`);
+console.log(`Risk appetite: ${assessment.scores.riskAppetite}/100`);
+console.log(`Confidence: ${assessment.diagnostics.confidence}`);
+
+// Use operational constraints
+assessment.constraints.forEach((constraint) => {
+  console.log(`- ${constraint}`);
+});
+
+// Check for regime transition risk
+if (assessment.diagnostics.transitionWatch) {
+  console.warn("⚠️  Near regime boundary—monitor closely");
+}
+```
+
+<Tip>
+  The Regime Engine runs deterministically—same inputs always produce the same outputs. This ensures reproducibility for historical analysis via [Time Machine](/features/time-machine).
+</Tip>
+
+## Related Features
+
+<CardGroup cols={2}>
+  <Card title="Decision Shield" icon="shield-check" href="/features/decision-shield">
+    Validate decisions against current regime
+  </Card>
+  <Card title="Time Machine" icon="clock-rotate-left" href="/features/time-machine">
+    Replay historical regime classifications
+  </Card>
+  <Card title="Signal Ops" icon="bell" href="/features/signal-ops">
+    Get alerts on regime changes
+  </Card>
+  <Card title="Briefing Pack" icon="file-export" href="/features/briefing-pack">
+    Export regime reports for stakeholders
+  </Card>
+</CardGroup>

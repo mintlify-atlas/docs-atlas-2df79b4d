@@ -1,0 +1,495 @@
+---
+title: Exporting Briefs
+description: Generate and share leadership summaries, weekly mandates, and regime context
+---
+
+Whether's **brief export system** transforms regime assessments into shareable artifacts for leadership, stakeholders, and cross-functional teams. Use briefs to communicate macro context, distribute weekly planning guidance, and document decision rationale.
+
+## Brief Types
+
+Whether supports three brief formats:
+
+1. **Weekly mandates:** Concise regime summary with operational constraints (for planning cycles)
+2. **Leadership summaries:** Full assessment with sensor data, diagnostics, and decision context (for executive briefings)
+3. **Decision rationale:** Decision Shield outputs with regime context (for audit trails and stakeholder alignment)
+
+---
+
+## Generating Weekly Mandates
+
+Weekly mandates distill regime conditions into **3 actionable constraints** for your team's planning cycle.
+
+### Content Structure
+
+```typescript
+import { buildWeeklyMandateEnvelope } from "@/lib/integrationBriefs";
+
+const mandate = buildWeeklyMandateEnvelope(assessment, treasury);
+
+console.log(mandate);
+// {
+//   title: "Whether weekly mandate — 2026-03-03",
+//   summary: "SCARCITY: Tightness 82/100, Risk appetite 48/100.",
+//   recordDate: "2026-03-03",
+//   regime: "SCARCITY",
+//   constraints: [
+//     "Shorten payback windows and preserve cash.",
+//     "Delay speculative hiring or large platform rewrites.",
+//     "Route roadmap bets through revenue certainty."
+//   ],
+//   markdown: "## Whether weekly mandate — 2026-03-03\n..."
+// }
+```
+
+**Key fields:**
+- **title:** Brief headline (includes date)
+- **summary:** One-sentence regime + scores
+- **constraints:** Top 3 operational constraints for current regime
+- **markdown:** Full brief in markdown format (for export)
+
+---
+
+### Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Monday Planning Standups" icon="calendar">
+    Share mandate at start of week to align roadmap priorities with regime conditions.
+  </Card>
+  <Card title="Quarterly Planning Kickoffs" icon="flag">
+    Distribute mandate to anchor initiative prioritization in current macro context.
+  </Card>
+  <Card title="Board Decks" icon="presentation">
+    Include mandate in board materials to explain why certain bets were deferred.
+  </Card>
+  <Card title="Investor Updates" icon="envelope">
+    Attach mandate to monthly investor emails to contextualize burn rate decisions.
+  </Card>
+</CardGroup>
+
+---
+
+## Export Formats
+
+### Slack
+
+Post mandates directly to a Slack channel:
+
+```typescript
+import { buildWeeklyMandatePayload } from "@/lib/integrationBriefs";
+
+const payload = buildWeeklyMandatePayload("slack", assessment, treasury);
+
+// Send to Slack via webhook
+await fetch(process.env.SLACK_WEBHOOK_URL, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(payload),
+});
+```
+
+**Slack message format:**
+
+```
+📋 Whether weekly mandate — 2026-03-03
+
+SCARCITY: Tightness 82/100, Risk appetite 48/100.
+
+Operational Constraints:
+• Shorten payback windows and preserve cash.
+• Delay speculative hiring or large platform rewrites.
+• Route roadmap bets through revenue certainty.
+
+Source: US Treasury Fiscal Data API
+
+[View Dashboard] [Compare to History]
+```
+
+---
+
+### Email
+
+Send mandates via email to stakeholders:
+
+```typescript
+const emailPayload = {
+  to: ["cfo@company.com", "vp-product@company.com"],
+  subject: mandate.title,
+  body: mandate.markdown,
+  attachments: [
+    {
+      filename: `mandate-${mandate.recordDate}.pdf`,
+      content: await generatePDF(mandate.markdown),
+    },
+  ],
+};
+
+await sendEmail(emailPayload);
+```
+
+**Email subject line:**
+```
+Whether weekly mandate — 2026-03-03
+```
+
+---
+
+### Notion
+
+Create a Notion page in your "Weekly Mandates" database:
+
+```typescript
+const notionPayload = buildWeeklyMandatePayload("notion", assessment, treasury);
+
+await notion.pages.create(notionPayload);
+```
+
+**Notion page structure:**
+- **Title:** Whether weekly mandate — 2026-03-03
+- **Properties:**
+  - Regime: `SCARCITY` (select field)
+  - Summary: "SCARCITY: Tightness 82/100..." (rich text)
+  - RecordDate: "2026-03-03" (date field)
+- **Content:** Bulleted list of constraints
+
+---
+
+### PDF
+
+Generate a PDF for offline distribution or board decks:
+
+```typescript
+import { generatePDF } from "@/lib/pdfGenerator";
+
+const pdfBuffer = await generatePDF({
+  content: mandate.markdown,
+  footer: `Source: ${treasury.source}`,
+  branding: {
+    logo: "/path/to/logo.png",
+    companyName: "Acme Corp",
+  },
+});
+
+// Save or email
+await fs.writeFile(`mandate-${mandate.recordDate}.pdf`, pdfBuffer);
+```
+
+**PDF layout:**
+- **Header:** Company logo + "Whether weekly mandate"
+- **Body:** Regime summary, constraints, source citations
+- **Footer:** Data source URL + generation timestamp
+
+---
+
+### Slide Deck (Google Slides)
+
+Generate a Google Slides presentation for leadership reviews:
+
+<Steps>
+  <Step title="Navigate to export page">
+    From Whether dashboard, click **Export** → **Generate Slide Deck**.
+  </Step>
+
+  <Step title="Choose template">
+    Select:
+    - **Executive briefing:** Full assessment with diagnostics (8 slides)
+    - **Planning one-pager:** Mandate summary only (1 slide)
+  </Step>
+
+  <Step title="Customize branding">
+    Upload company logo and choose color theme.
+  </Step>
+
+  <Step title="Generate and download">
+    Click **Generate**. Whether creates a `.pptx` file with:
+    - Slide 1: Regime summary + scores
+    - Slide 2: Sensor data (base rate, curve slope)
+    - Slide 3: Operational constraints
+    - Slide 4: Decision Shield verdicts (if applicable)
+    - Slides 5–8: Time Machine historical comparisons
+  </Step>
+</Steps>
+
+---
+
+## Including Citations and Sources
+
+All briefs include **data provenance** to ensure auditability:
+
+### Source Attribution
+
+**Example:**
+```markdown
+## Data Sources
+
+- **US Treasury yields:** [US Treasury Fiscal Data API](https://api.fiscaldata.treasury.gov/...)
+  - Record date: 2026-03-03
+  - Fetched at: 2026-03-03 14:30:00 UTC
+- **Macro series:** BBB credit spread, VIX index, CPI year-over-year
+  - Providers: FRED, Yahoo Finance, BLS
+```
+
+### Timestamping
+
+Briefs include:
+- **Record date:** When the underlying data was published (e.g., 2026-03-03)
+- **Fetched at:** When Whether retrieved the data (e.g., 2026-03-03 14:30:00 UTC)
+- **Generated at:** When the brief was created (e.g., 2026-03-03 15:00:00 UTC)
+
+<Note>
+**Stale data warnings:** If `fetched_at` is >48 hours old, briefs include a warning banner.
+</Note>
+
+---
+
+## Scheduling Recurring Briefs
+
+Automate brief generation on a schedule:
+
+<Steps>
+  <Step title="Navigate to automation settings">
+    Go to `/settings/automation` → **Recurring Briefs**.
+  </Step>
+
+  <Step title="Create a schedule">
+    Choose:
+    - **Frequency:** Daily, weekly (Monday), or monthly (1st of month)
+    - **Time:** 9:00 AM in your team's timezone
+    - **Format:** Slack, email, Notion, or PDF
+  </Step>
+
+  <Step title="Select recipients">
+    Add:
+    - Slack channels (e.g., `#planning`, `#finance`)
+    - Email addresses (e.g., leadership team, board members)
+    - Notion database IDs
+  </Step>
+
+  <Step title="Enable and test">
+    Toggle **Enabled** and click **Send Test Brief** to verify delivery.
+  </Step>
+</Steps>
+
+### Example Schedule
+
+**Weekly mandate for product/eng:**
+- **Schedule:** Every Monday at 9:00 AM
+- **Format:** Slack message to `#planning`
+- **Content:** Mandate summary + constraints
+
+**Monthly leadership briefing:**
+- **Schedule:** 1st of month at 8:00 AM
+- **Format:** Email to CFO, CEO, VP Product
+- **Content:** Full assessment + slide deck attachment
+
+---
+
+## Leadership Summary Format
+
+Leadership summaries include comprehensive regime context:
+
+### Structure
+
+1. **Executive summary:** Regime classification + one-paragraph narrative
+2. **Sensor readings:** Base rate, curve slope, macro adjustments
+3. **Diagnostics:** Confidence level, transition watch, intensity
+4. **Operational constraints:** Full list (not just top 3)
+5. **Decision Shield insights:** Sample verdicts for common actions
+6. **Historical comparison:** Current regime vs. 30/60/90-day lookback
+7. **Data sources:** Citations and timestamps
+
+### Example Output
+
+```markdown
+# Leadership Briefing: SCARCITY Regime (2026-03-03)
+
+## Executive Summary
+
+Whether's macro sensors classify current conditions as **SCARCITY** (tightness: 82, risk appetite: 48). Capital is expensive due to a 5.25% base rate and inverted yield curve (-0.45%). Investor confidence is low, amplified by a VIX spike to 28 and tech layoff trends at 70. Operational focus should prioritize cash preservation, revenue certainty, and defensive positioning.
+
+## Sensor Readings
+
+- **Base rate (1M):** 5.25% (above 5% threshold → capital is expensive)
+- **Curve slope (10Y - 2Y):** -0.45% (inverted → caution signal)
+- **Tightness score:** 82/100 (HIGH)
+- **Risk appetite score:** 48/100 (LOW)
+- **Macro adjustments:**
+  - VIX volatility shock: -12 pts risk appetite
+  - Tech layoff pressure: -6 pts risk appetite
+
+## Diagnostics
+
+- **Confidence:** HIGH (nearest threshold delta: 22 pts)
+- **Transition watch:** Inactive
+- **Intensity:** STRONG (SCARCITY is well-established)
+- **Weak reads:** 2 (VIX, layoffs)
+
+## Operational Constraints
+
+1. Shorten payback windows and preserve cash.
+2. Delay speculative hiring or large platform rewrites.
+3. Route roadmap bets through revenue certainty.
+
+## Decision Shield Insights
+
+| Decision | Lifecycle | Verdict | Guardrail |
+|----------|-----------|---------|----------|
+| **HIRE** (+10 engineers) | GROWTH | DANGEROUS | Hire only for revenue-critical roles with 12-month payback. |
+| **REWRITE** (platform v2) | SCALE | DANGEROUS | Rewrite only if tech debt blocks revenue or causes churn. |
+| **LAUNCH** (new product line) | MATURE | RISKY | Launch only with strong customer pull; defer experiments. |
+
+## Historical Comparison
+
+- **30 days ago:** DEFENSIVE (tightness: 75, risk appetite: 55)
+  - Delta: +7 tightness, -7 risk appetite → deteriorating
+- **90 days ago:** EXPANSION (tightness: 62, risk appetite: 68)
+  - Delta: +20 tightness, -20 risk appetite → significant shift
+
+**Interpretation:** Current SCARCITY is the most severe regime in 90 days. Conditions deteriorated rapidly due to Fed rate hikes and equity market volatility.
+
+## Data Sources
+
+- **US Treasury Fiscal Data API:** Record date 2026-03-03, fetched at 14:30 UTC
+- **FRED (BBB spread, VIX):** Record date 2026-03-02, fetched at 14:32 UTC
+- **BLS (CPI):** Record date 2026-02-28, fetched at 14:35 UTC
+
+---
+
+*Generated by Whether on 2026-03-03 at 15:00 UTC*
+```
+
+---
+
+## Decision Rationale Briefs
+
+Document decision context for audit trails and stakeholder alignment:
+
+### Structure
+
+1. **Decision summary:** Action, category, lifecycle stage
+2. **Verdict:** SAFE / RISKY / DANGEROUS
+3. **Regime context:** Current regime + sensor bullets
+4. **Guardrail:** Applied constraint
+5. **Reversal trigger:** When to re-evaluate
+6. **Approvals:** Stakeholder sign-off (if applicable)
+
+### Example Output
+
+```markdown
+# Decision Rationale: Engineering Hiring Expansion
+
+**Decision:** Hire +15 full-time engineers for platform team  
+**Category:** HIRING  
+**Lifecycle Stage:** GROWTH  
+**Evaluated on:** 2026-03-03  
+
+## Verdict
+
+**DANGEROUS**
+
+## Regime Context
+
+**Current regime:** SCARCITY (tightness: 82, risk appetite: 48)
+
+**Sensor bullets:**
+- Base rate: 5.25% is above 5%, so capital is expensive.
+- Curve slope: inverted (-0.45%), signaling caution.
+- Tightness 82 vs risk appetite 48 keeps conditions in scarcity.
+
+## Guardrail
+
+Hire only for revenue-critical roles with 12-month payback windows.
+
+## Applied Constraints
+
+- Reduced hiring target from 15 → 6 engineers
+- Prioritized backend engineers for API reliability (directly impacts revenue)
+- Deferred frontend hiring until DEFENSIVE conditions return
+- Negotiated 90-day probation periods to maintain flexibility
+
+## Reversal Trigger
+
+Revisit when tightness drops below 70 and risk appetite rises above 50 for 30 consecutive days (current: 82/48).
+
+**Review scheduled for:** 2026-04-02
+
+## Approvals
+
+- **CFO:** Approved (conditional on cash runway extension)
+- **VP Engineering:** Approved
+- **CEO:** Approved
+
+---
+
+*Generated by Whether on 2026-03-03 at 16:00 UTC*
+```
+
+---
+
+## Export API Reference
+
+### Generate Weekly Mandate
+
+```typescript
+import { buildWeeklyMandateEnvelope } from "@/lib/integrationBriefs";
+
+const mandate = buildWeeklyMandateEnvelope(assessment, treasury);
+```
+
+**Returns:**
+```typescript
+type WeeklyMandateEnvelope = {
+  title: string;
+  summary: string;
+  recordDate: string;
+  regime: RegimeKey;
+  constraints: string[];
+  markdown: string;
+};
+```
+
+---
+
+### Generate Integration Payload
+
+```typescript
+import { buildWeeklyMandatePayload } from "@/lib/integrationBriefs";
+
+const payload = buildWeeklyMandatePayload(
+  "slack" | "notion" | "linear",
+  assessment,
+  treasury
+);
+```
+
+**Returns:** Platform-specific payload structure (see [Integration Targets](#export-formats)).
+
+---
+
+## Best Practices
+
+<Warning>
+**Avoid brief sprawl:**
+- Limit weekly mandates to 1 per team (not 1 per person)
+- Use leadership summaries for monthly/quarterly reviews only
+- Archive decision rationale briefs in a central repository (Notion, Confluence)
+</Warning>
+
+<Note>
+**Effective brief distribution:**
+- **Weekly mandates:** Async (Slack, email) for planning cycles
+- **Leadership summaries:** Sync (deck presentation) for exec reviews
+- **Decision rationale:** Attached to decision docs (Linear, Jira, Notion)
+</Note>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Alerts and Notifications" icon="bell" href="/guides/alerts-and-notifications">
+    Automate brief generation when regimes change
+  </Card>
+  <Card title="Making Decisions" icon="shield-check" href="/guides/making-decisions">
+    Generate decision rationale briefs from Decision Shield outputs
+  </Card>
+</CardGroup>

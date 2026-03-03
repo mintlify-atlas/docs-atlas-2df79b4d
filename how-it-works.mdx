@@ -1,0 +1,287 @@
+---
+title: How It Works
+description: Understanding the core loop from Treasury data to operational constraints
+---
+
+# How Whether Works
+
+Whether operates on a deterministic, explainable loop that converts public Treasury data into operational constraints. There are no opaque ML models—every score and classification follows testable rules.
+
+## The Core Loop
+
+<Steps>
+  <Step title="Fetch Treasury Data">
+    Server fetches US Treasury yield curve data from the **US Treasury Fiscal Data API** (`/v2/accounting/od/daily_treasury_yield_curve`).
+    
+    **Required fields:**
+    - 1-month yield (with 3-month fallback)
+    - 2-year yield
+    - 10-year yield
+    
+    **Caching:** 24-hour revalidate (Treasury updates end-of-day)
+  </Step>
+  
+  <Step title="Normalize to TreasuryData">
+    All outputs include explicit metadata:
+    - `source` - API endpoint URL
+    - `record_date` - Date of Treasury data
+    - `fetched_at` - Timestamp of retrieval
+    
+    If the API fails, Whether serves snapshot data with **OFFLINE** labeling.
+  </Step>
+  
+  <Step title="Run Regime Engine">
+    The Regime Engine scores two dimensions:
+    - **Tightness** (0-100): How expensive is capital?
+    - **Risk Appetite** (0-100): How willing are investors to take risk?
+    
+    These scores are then classified into one of four regimes.
+  </Step>
+  
+  <Step title="Render Regime + Playbook">
+    The classified regime produces:
+    - Regime label and description
+    - Operating constraints (pace, hiring, roadmap bias)
+    - Decision Shield verdicts
+    - Export-ready briefs with full source metadata
+  </Step>
+</Steps>
+
+## How the Regime Engine Scores Tightness
+
+Tightness measures how expensive capital is right now. It blends two components:
+
+### 1. Base Rate Points
+
+The base rate (1-month or 3-month Treasury yield) represents the cost of short-term money.
+
+```typescript
+// From regimeEngine.ts:108-109
+export const BASE_RATE_TIGHTNESS_THRESHOLD = 5;
+export const TIGHTNESS_BASE_RATE_POINTS = 90;
+
+// From regimeEngine.ts:300-304
+const baseRatePoints = clamp(
+  Math.round((baseRate - baseRateThreshold) * BASE_RATE_TIGHTNESS_MULTIPLIER),
+  SCORE_MIN,
+  TIGHTNESS_BASE_RATE_POINTS
+);
+```
+
+**Formula:**
+- Base rate points ramp from **0 to 90** as rates move above **5%**
+- Multiplier: **180** (each 1% increase above 5% adds 180 raw points, capped at 90)
+
+### 2. Inversion Points
+
+When the yield curve inverts (10Y < 2Y), it signals stress and caution.
+
+```typescript
+// From regimeEngine.ts:110
+export const TIGHTNESS_INVERSION_POINTS = 25;
+
+// From regimeEngine.ts:306-312
+const inversionPoints =
+  curveSlope < SCORE_MIN
+    ? clamp(
+        Math.round(Math.abs(curveSlope) * CURVE_INVERSION_TIGHTNESS_MULTIPLIER),
+        SCORE_MIN,
+        TIGHTNESS_INVERSION_POINTS
+      )
+    : SCORE_MIN;
+```
+
+**Formula:**
+- Inversion points ramp from **0 to 25** as slope moves below **0%**
+- Multiplier: **50** (each 1% inversion adds 50 raw points, capped at 25)
+
+### Combined Tightness Score
+
+```typescript
+// From regimeEngine.ts:313-315
+const score = baseRatePoints + inversionPoints;
+return clamp(score, SCORE_MIN, TIGHTNESS_CAP);
+```
+
+**Total cap: 100**
+
+<Note>
+**Example:** If base rate is 5.5% and curve slope is -0.3%:
+- Base rate points: `(5.5 - 5.0) × 180 = 90` (capped at 90)
+- Inversion points: `0.3 × 50 = 15`
+- **Tightness = 90 + 15 = 100** (capped at 100)
+</Note>
+
+## How the Regime Engine Scores Risk Appetite
+
+Risk appetite measures investor confidence based on the 10Y-2Y yield curve slope.
+
+```typescript
+// From regimeEngine.ts:112-113
+export const RISK_APPETITE_MIN_SLOPE = -1.0;
+export const RISK_APPETITE_MAX_SLOPE = 1.5;
+
+// From regimeEngine.ts:318-322
+export const computeRiskAppetiteScore = (curveSlope: number) => {
+  const normalized =
+    (curveSlope - RISK_APPETITE_MIN_SLOPE) / (RISK_APPETITE_MAX_SLOPE - RISK_APPETITE_MIN_SLOPE);
+  return clamp(Math.round(normalized * SCORE_MAX), SCORE_MIN, SCORE_MAX);
+};
+```
+
+**Formula:**
+- Maps slope from **-1.0%** (very cautious) to **+1.5%** (confident)
+- Scaled linearly to 0-100
+
+<Note>
+**Example:** If curve slope is +0.5%:
+- Normalized: `(0.5 - (-1.0)) / (1.5 - (-1.0)) = 1.5 / 2.5 = 0.6`
+- **Risk Appetite = 0.6 × 100 = 60**
+</Note>
+
+## How Regimes Are Classified
+
+Once tightness and risk appetite are scored, Whether classifies the regime using fixed thresholds.
+
+```typescript
+// From regimeEngine.ts:114-115
+export const TIGHTNESS_REGIME_THRESHOLD = 70;
+export const RISK_APPETITE_REGIME_THRESHOLD = 50;
+
+// From regimeEngine.ts:324-339
+export const classifyRegime = (
+  tightness: number,
+  riskAppetite: number,
+  thresholds: RegimeThresholds
+): RegimeKey => {
+  if (tightness > thresholds.tightnessRegime && riskAppetite <= thresholds.riskAppetiteRegime) {
+    return "SCARCITY";
+  }
+  if (tightness > thresholds.tightnessRegime && riskAppetite > thresholds.riskAppetiteRegime) {
+    return "DEFENSIVE";
+  }
+  if (tightness <= thresholds.tightnessRegime && riskAppetite <= thresholds.riskAppetiteRegime) {
+    return "VOLATILE";
+  }
+  return "EXPANSION";
+};
+```
+
+### Classification Matrix
+
+| Tightness | Risk Appetite | Regime      |
+|-----------|---------------|-------------|
+| > 70      | ≤ 50          | **SCARCITY**   |
+| > 70      | > 50          | **DEFENSIVE**  |
+| ≤ 70      | ≤ 50          | **VOLATILE**   |
+| ≤ 70      | > 50          | **EXPANSION**  |
+
+<Tip>
+Operators can override these thresholds via URL query params. Overrides are tracked in an on-screen audit trail.
+</Tip>
+
+## How This Translates to Operational Constraints
+
+Each regime maps to concrete operating guidance.
+
+<Tabs>
+  <Tab title="SCARCITY">
+    **Regime:** Tightness > 70, Risk Appetite ≤ 50
+    
+    **Description:** Capital is expensive and risk appetite is low. Prioritize survival over growth.
+    
+    **Constraints:**
+    - Shorten payback windows and preserve cash
+    - Delay speculative hiring or large platform rewrites
+    - Route roadmap bets through revenue certainty
+    
+    **Decision Shield Bias:** Most initiatives marked **Dangerous** or **Risky**
+  </Tab>
+  
+  <Tab title="DEFENSIVE">
+    **Regime:** Tightness > 70, Risk Appetite > 50
+    
+    **Description:** Capital is expensive but risk appetite is moderate. Operate for efficiency.
+    
+    **Constraints:**
+    - Focus on margin expansion and retention
+    - Cut low-leverage experiments
+    - Convert demand with tighter sales cycles
+    
+    **Decision Shield Bias:** Expansion moves marked **Risky** unless proven ROI
+  </Tab>
+  
+  <Tab title="VOLATILE">
+    **Regime:** Tightness ≤ 70, Risk Appetite ≤ 50
+    
+    **Description:** Capital is cheaper but risk appetite is weak. Build trust and resilience.
+    
+    **Constraints:**
+    - Ship reliability and security before novelty
+    - Avoid disruptive pivots that spook buyers
+    - Lean into proof, references, and guarantees
+    
+    **Decision Shield Bias:** Novel experiments marked **Risky**; core work marked **Safe**
+  </Tab>
+  
+  <Tab title="EXPANSION">
+    **Regime:** Tightness ≤ 70, Risk Appetite > 50
+    
+    **Description:** Capital is cheap and risk appetite is healthy. Move quickly to capture share.
+    
+    **Constraints:**
+    - Prioritize speed and distribution over polish
+    - Accept controlled waste to win market share
+    - Invest ahead of demand where signals are strong
+    
+    **Decision Shield Bias:** Most initiatives marked **Safe** or **Risky** (green-lit)
+  </Tab>
+</Tabs>
+
+## Data Provenance
+
+Every output includes explicit source metadata:
+
+```typescript
+// From regimeEngine.ts:229-249
+return [
+  {
+    id: "base-rate",
+    label: baseRateLabel,
+    value: baseRate.used === "MISSING" ? null : baseRate.value,
+    unit: "%",
+    sourceLabel: "US Treasury Fiscal Data API",
+    sourceUrl: treasury.source,
+    recordDate: treasury.record_date,
+    fetchedAt: treasury.fetched_at,
+    notes: baseRateNotes,
+  },
+  // ... more inputs
+];
+```
+
+<Warning>
+If Treasury data is missing, Whether defaults to conservative assumptions (base rate = threshold, curve slope = cautious floor) and adds data warnings to the output.
+</Warning>
+
+## Offline Mode
+
+If the Treasury API fails:
+1. Whether serves snapshot data from `data/` cache
+2. UI displays **OFFLINE / SIMULATED** badge
+3. All outputs tagged with `fallback_reason` and `fallback_at` metadata
+
+<Note>
+Operators should pause irreversible decisions until the live feed returns or they confirm the cached data is acceptable.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get started with your first regime reading
+  </Card>
+  <Card title="Decision Shield" icon="shield" href="/features/decision-shield">
+    Learn how to use verdict analysis for planning decisions
+  </Card>
+</CardGroup>

@@ -1,0 +1,321 @@
+---
+title: Data Provenance
+description: How Whether tracks data freshness, source health, and audit trails
+---
+
+## Overview
+
+Whether treats data provenance as a first-class concern. Every numeric output includes explicit metadata about its source, timestamp, and freshness. This ensures operators can trust the regime assessment and audit decisions retroactively.
+
+## Required Metadata
+
+All data structures in Whether include these fields:
+
+<ParamField path="source" type="string" required>
+  The origin of the data (e.g., `"https://fred.stlouisfed.org"`, `"BLS public API"`)
+</ParamField>
+
+<ParamField path="record_date" type="string" required>
+  The official date of the data point (e.g., `"2024-03-15"`). This is the date the data represents, not when it was fetched.
+</ParamField>
+
+<ParamField path="fetched_at" type="string" required>
+  ISO 8601 timestamp when Whether retrieved the data (e.g., `"2024-03-16T14:23:11.000Z"`)
+</ParamField>
+
+<ParamField path="isLive" type="boolean" required>
+  - `true`: Data was fetched from a live API
+  - `false`: Data is from a snapshot file (offline mode)
+</ParamField>
+
+### Optional Fallback Metadata
+
+When Whether falls back to snapshot data, additional fields explain why:
+
+<ParamField path="fallback_at" type="string" optional>
+  ISO timestamp when the fallback was triggered
+</ParamField>
+
+<ParamField path="fallback_reason" type="string" optional>
+  Human-readable explanation (e.g., `"Treasury API error: 503"`, `"Time Machine cache miss for historical selection."`)
+</ParamField>
+
+## Source Health Monitoring
+
+### Live Fetch Flow
+
+Whether attempts to fetch live data on every request, subject to Next.js caching:
+
+```typescript
+// From lib/treasury/treasuryClient.ts:115
+try {
+  const [oneMonthResponse, threeMonthResponse, twoYearResponse, tenYearResponse] =
+    await Promise.all([
+      fetcher(endpoints.oneMonth),
+      fetcher(endpoints.threeMonth),
+      fetcher(endpoints.twoYear),
+      fetcher(endpoints.tenYear),
+    ]);
+
+  const responses = [oneMonthResponse, threeMonthResponse, twoYearResponse, tenYearResponse];
+  const badResponse = responses.find((response) => !response.ok);
+  if (badResponse) {
+    throw new Error(`Treasury API error: ${badResponse.status}`);
+  }
+
+  // Process data...
+  return {
+    source: 'https://fred.stlouisfed.org',
+    record_date: recordDate,
+    fetched_at,
+    isLive: true,
+    yields: { /* ... */ },
+  };
+} catch (error) {
+  if (options.snapshotFallback) {
+    const message = error instanceof Error ? error.message : 'Unknown Treasury fetch error';
+    return buildFallbackSnapshot(options.snapshotFallback, message);
+  }
+  throw error;
+}
+```
+
+### Fallback Snapshot Construction
+
+When live fetch fails, Whether wraps the snapshot with explicit metadata:
+
+```typescript
+// From lib/treasury/treasuryClient.ts:22
+const buildFallbackSnapshot = (snapshot: TreasuryData, reason: string): TreasuryData => {
+  return {
+    ...snapshot,
+    isLive: false,
+    fallback_at: new Date().toISOString(),
+    fallback_reason: reason,
+  };
+};
+```
+
+This ensures the UI can display an accurate "OFFLINE" or "SIMULATED" badge.
+
+## Offline Mode and Snapshot Fallback
+
+### When Whether Uses Snapshots
+
+1. **Live API failure**: Network error, 5xx response, or malformed data
+2. **Time Machine mode**: Historical regime views use pre-cached snapshots
+3. **Missing data**: If required fields are absent from the live response
+
+### Snapshot Storage
+
+Snapshots are committed to the repository:
+
+- **Treasury data**: `data/treasury_snapshot.json`
+- **Macro indicators**: `data/macro_snapshot.json`
+
+These files are updated periodically (typically weekly) to ensure fallback data is not stale.
+
+### Snapshot Schema Validation
+
+Before using snapshot data, Whether validates it against the expected schema:
+
+```typescript
+// From lib/treasury/treasurySchema.ts:20
+export const TreasuryDataSchema = z.object({
+  source: z.string(),
+  record_date: z.string(),
+  fetched_at: z.string(),
+  isLive: z.boolean(),
+  fallback_at: z.string().nullable().optional(),
+  fallback_reason: z.string().nullable().optional(),
+  yields: TreasuryYieldsSchema,
+});
+
+export const parseTreasuryData = (input: unknown) => {
+  const parsed = TreasuryDataSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
+};
+```
+
+If validation fails, Whether refuses to serve stale or malformed data.
+
+## OFFLINE/SIMULATED Badges
+
+Whether displays clear visual indicators when data is not live:
+
+### OFFLINE Badge
+
+Shown when `isLive: false` due to API failure:
+
+- **Color**: Gray or muted yellow
+- **Placement**: Adjacent to regime label or sensor cards
+- **Tooltip**: Includes `fallback_reason` and `fallback_at` timestamp
+
+### SIMULATED Badge
+
+Shown in Time Machine mode when viewing historical regimes:
+
+- **Color**: Blue or purple
+- **Placement**: Global banner across the top of the UI
+- **Message**: "Historical View: YYYY-MM" with a link to return to live mode
+
+### Implementation
+
+Badges are rendered based on the `isLive` and `fallback_at` metadata:
+
+```tsx
+// Pseudocode from UI components
+if (!treasuryData.isLive) {
+  if (treasuryData.fallback_at) {
+    return <OfflineBadge reason={treasuryData.fallback_reason} />;
+  }
+  return <SimulatedBadge />;
+}
+```
+
+## Stale Data Handling
+
+### Staleness Threshold
+
+Whether considers data stale if:
+
+- **Treasury yields**: `record_date` is more than 3 business days old
+- **Macro indicators**: `record_date` is more than 1 month old
+
+### Staleness Warnings
+
+If live data is successfully fetched but the `record_date` is stale, Whether displays a warning:
+
+- **Icon**: ⚠️ next to the timestamp
+- **Tooltip**: "This data is older than expected. Source may not be updating regularly."
+
+### No Arbitrary Defaults
+
+Whether **never** silently defaults to zero or placeholder values. If data is missing:
+
+1. Attempt to fetch from live source
+2. Fall back to snapshot with explicit `fallback_reason`
+3. If both fail, display an error message and refuse to classify regime
+
+This prevents false confidence in incomplete data.
+
+## Audit Trails
+
+### Regime Assessment Metadata
+
+Every `RegimeAssessment` object includes a full audit trail:
+
+```typescript
+// From lib/regimeEngine.ts:228
+const buildRegimeInputs = (
+  treasury: TreasuryData,
+  baseRate: ReturnType<typeof getBaseRate>,
+  curveSlope: number | null
+): RegimeInput[] => {
+  return [
+    {
+      id: 'base-rate',
+      label: baseRateLabel,
+      value: baseRate.used === 'MISSING' ? null : baseRate.value,
+      unit: '%',
+      sourceLabel: TREASURY_SOURCE_LABEL,
+      sourceUrl: treasury.source,
+      recordDate: treasury.record_date,
+      fetchedAt: treasury.fetched_at,
+      notes: baseRateNotes,
+    },
+    // ... additional inputs
+  ];
+};
+```
+
+This allows the UI to display:
+
+- Which Treasury yields were used
+- Which fallback logic was applied (e.g., 3M instead of 1M)
+- The exact timestamps and sources for each input
+
+### Decision Memory (Post-MVP)
+
+In the next-level release, Whether will persist decision metadata to an append-only log:
+
+```json
+{
+  "decision_id": "dec_2024-03-16_001",
+  "timestamp": "2024-03-16T14:23:11.000Z",
+  "inputs": {
+    "base_rate": 5.3,
+    "curve_slope": 0.42,
+    "treasury_source": "https://fred.stlouisfed.org",
+    "treasury_record_date": "2024-03-15",
+    "treasury_fetched_at": "2024-03-16T08:00:00.000Z"
+  },
+  "regime": "DEFENSIVE",
+  "scores": {
+    "tightness": 85,
+    "riskAppetite": 62
+  },
+  "operator_notes": "Reviewed before Q2 planning",
+  "external_links": ["https://internal.example.com/q2-plan"]
+}
+```
+
+This log will be immutable and exportable as JSON/CSV for compliance audits.
+
+## Source URLs and Attribution
+
+Every data point in Whether includes clickable source URLs:
+
+- **Treasury yields**: Link to `fred.stlouisfed.org/series/{SERIES_ID}`
+- **BLS series**: Link to `api.bls.gov` with series ID in tooltip
+- **FRED macro indicators**: Link to `fred.stlouisfed.org/series/{SERIES_ID}`
+
+This allows operators to verify data independently and check for upstream issues.
+
+## Time Machine Cache
+
+When viewing historical regimes, Whether uses a pre-built cache:
+
+```typescript
+// From lib/treasury/treasuryClient.ts:89
+if (options.asOf) {
+  const cachedSnapshot = findTimeMachineSnapshot(options.asOf);
+  if (cachedSnapshot) {
+    return cachedSnapshot;
+  }
+
+  if (options.snapshotFallback) {
+    return buildFallbackSnapshot(
+      options.snapshotFallback,
+      'Time Machine cache miss for historical selection.'
+    );
+  }
+
+  throw new Error('Time Machine cache miss for historical selection.');
+}
+```
+
+### Cache Structure
+
+The Time Machine cache is a JSON file mapping dates to snapshots:
+
+```json
+{
+  "2024-03-01": {
+    "source": "https://fred.stlouisfed.org",
+    "record_date": "2024-03-01",
+    "fetched_at": "2024-03-02T00:00:00.000Z",
+    "isLive": false,
+    "yields": { /* ... */ }
+  },
+  "2024-02-01": { /* ... */ }
+}
+```
+
+This ensures historical views reflect the actual data available at that time, not retroactively "corrected" values.
+
+## Related
+
+- [Treasury Yields](/data/treasury-yields) - Core yield curve data sourcing
+- [Macro Indicators](/data/macro-indicators) - Additional economic signals
+- [Regime Scoring](/concepts/regime-scoring) - How data feeds into classification

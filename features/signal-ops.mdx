@@ -1,0 +1,517 @@
+---
+title: 'Signal Ops'
+description: 'Automated regime change alerts with reason codes, weekly digests, and Time Machine deep links'
+icon: 'bell'
+---
+
+## Overview
+
+**Signal Ops** monitors regime assessments and fires alerts when meaningful threshold crossings occur. It ensures you never miss a regime transition that demands operational adjustments.
+
+Key capabilities:
+
+<CardGroup cols={2}>
+  <Card title="Regime Change Alerts" icon="bell-on">
+    Fires on SCARCITY↔EXPANSION and threshold crossings
+  </Card>
+  <Card title="Alert Reason Codes" icon="code">
+    Structured explanations for every trigger
+  </Card>
+  <Card title="Weekly Digests" icon="envelope">
+    Summary of all regime shifts over 7 days
+  </Card>
+  <Card title="Time Machine Links" icon="clock-rotate-left">
+    Deep links to historical comparison views
+  </Card>
+</CardGroup>
+
+## Alert Triggers
+
+Signal Ops creates alerts when specific conditions are met:
+
+```typescript lib/signalOps.ts
+export const shouldCreateSignalAlert = (
+  payload: SignalAlertPayload,
+  latestAlert?: RegimeAlertEvent
+) => {
+  const hasRequiredTrigger = payload.reasons.some((reason) =>
+    [
+      "regime-change",
+      "tightness-upshift",
+      "tightness-downshift",
+      "risk-appetite-upshift",
+      "risk-appetite-downshift",
+    ].includes(reason.code)
+  );
+
+  if (!hasRequiredTrigger) {
+    return false;
+  }
+
+  if (!latestAlert) {
+    return true;
+  }
+
+  const nowMs = Date.now();
+  const latestMs = Date.parse(latestAlert.createdAt);
+  if (Number.isNaN(latestMs)) {
+    return true;
+  }
+
+  const withinCooldown = nowMs - latestMs < ONE_DAY_MS;
+  const regimeFlippedAgain =
+    payload.currentAssessment.regime !== latestAlert.payload.currentAssessment.regime;
+
+  if (withinCooldown && !regimeFlippedAgain) {
+    return false;
+  }
+
+  return true;
+};
+```
+
+<Steps>
+  <Step title="Check for required trigger">
+    Alert fires only if one of five reason codes appears:
+    - `regime-change` (e.g., SCARCITY → DEFENSIVE)
+    - `tightness-upshift` (tightness crosses above 70)
+    - `tightness-downshift` (tightness falls below 70)
+    - `risk-appetite-upshift` (risk appetite crosses above 50)
+    - `risk-appetite-downshift` (risk appetite falls below 50)
+  </Step>
+  <Step title="Cooldown logic">
+    If an alert fired in the last 24 hours, suppress duplicates **unless** the regime flipped again
+  </Step>
+  <Step title="Create alert">
+    Generate `RegimeAlertEvent` with full payload and timestamp
+  </Step>
+</Steps>
+
+<Info>
+  **24-hour cooldown** prevents alert fatigue. Exception: if DEFENSIVE→SCARCITY→DEFENSIVE happens within 24 hours, you'll get two alerts.
+</Info>
+
+## Alert Reason Codes
+
+Every alert includes structured reasons explaining the trigger:
+
+```typescript lib/regimeEngine.ts
+export type RegimeChangeReason = {
+  code: string;
+  message: string;
+};
+```
+
+### Available Codes
+
+<AccordionGroup>
+  <Accordion title="regime-change" icon="arrows-spin">
+    **Full regime transition**
+    
+    Example: `"Regime shifted from EXPANSION to DEFENSIVE."`
+    
+    <Note>
+      This is the highest-priority signal—always triggers alerts and demands immediate review.
+    </Note>
+  </Accordion>
+
+  <Accordion title="tightness-upshift" icon="arrow-trend-up">
+    **Tightness crossed above threshold**
+    
+    Example: `"Tightness crossed above 70."`
+    
+    Indicates capital costs are rising above the regime boundary.
+  </Accordion>
+
+  <Accordion title="tightness-downshift" icon="arrow-trend-down">
+    **Tightness fell below threshold**
+    
+    Example: `"Tightness fell below 70."`
+    
+    Signals improving capital conditions.
+  </Accordion>
+
+  <Accordion title="risk-appetite-upshift" icon="arrow-trend-up">
+    **Risk appetite crossed above threshold**
+    
+    Example: `"Risk appetite crossed above 50."`
+    
+    Market confidence is improving.
+  </Accordion>
+
+  <Accordion title="risk-appetite-downshift" icon="arrow-trend-down">
+    **Risk appetite fell below threshold**
+    
+    Example: `"Risk appetite fell below 50."`
+    
+    Market confidence is deteriorating.
+  </Accordion>
+
+  <Accordion title="base-rate-upshift" icon="percent">
+    **Base rate crossed above threshold**
+    
+    Example: `"Base rate crossed above 5.0%."`
+    
+    Policy rates are tightening (informational, doesn't always trigger alerts).
+  </Accordion>
+
+  <Accordion title="base-rate-downshift" icon="percent">
+    **Base rate fell below threshold**
+    
+    Example: `"Base rate fell below 5.0%."`
+    
+    Policy rates are easing.
+  </Accordion>
+
+  <Accordion title="curve-slope-negative" icon="arrow-down-wide-short">
+    **Yield curve inverted**
+    
+    Example: `"Curve slope turned negative."`
+    
+    Classic recession signal—10Y yield fell below 2Y.
+  </Accordion>
+
+  <Accordion title="curve-slope-positive" icon="arrow-up-wide-short">
+    **Yield curve normalized**
+    
+    Example: `"Curve slope turned positive."`
+    
+    Inversion resolved—growth expectations improving.
+  </Accordion>
+
+  <Accordion title="signals-updated" icon="rotate">
+    **Default reason when no threshold crossed**
+    
+    Example: `"Signal values updated since the last read."`
+    
+    Data refresh occurred but no meaningful change detected.
+  </Accordion>
+</AccordionGroup>
+
+## Reason Code Generation
+
+Reason codes are computed by comparing previous and current assessments:
+
+```typescript lib/regimeEngine.ts
+export const buildRegimeChangeReasons = (
+  previous: RegimeAssessment | null,
+  current: RegimeAssessment
+): RegimeChangeReason[] => {
+  if (!previous) {
+    return [];
+  }
+
+  const reasons: RegimeChangeReason[] = [];
+  const previousTightnessThreshold = previous.thresholds.tightnessRegime;
+  const currentTightnessThreshold = current.thresholds.tightnessRegime;
+  const previousRiskThreshold = previous.thresholds.riskAppetiteRegime;
+  const currentRiskThreshold = current.thresholds.riskAppetiteRegime;
+
+  const pushReason = (code: string, message: string) => {
+    reasons.push({ code, message });
+  };
+
+  // Regime change
+  if (previous.regime !== current.regime) {
+    pushReason("regime-change", `Regime shifted from ${previous.regime} to ${current.regime}.`);
+  }
+
+  // Tightness shifts
+  if (
+    previous.scores.tightness <= previousTightnessThreshold &&
+    current.scores.tightness > currentTightnessThreshold
+  ) {
+    pushReason("tightness-upshift", `Tightness crossed above ${currentTightnessThreshold}.`);
+  } else if (
+    previous.scores.tightness > previousTightnessThreshold &&
+    current.scores.tightness <= currentTightnessThreshold
+  ) {
+    pushReason("tightness-downshift", `Tightness fell below ${currentTightnessThreshold}.`);
+  }
+
+  // Risk appetite shifts
+  if (
+    previous.scores.riskAppetite <= previousRiskThreshold &&
+    current.scores.riskAppetite > currentRiskThreshold
+  ) {
+    pushReason("risk-appetite-upshift", `Risk appetite crossed above ${currentRiskThreshold}.`);
+  } else if (
+    previous.scores.riskAppetite > previousRiskThreshold &&
+    current.scores.riskAppetite <= currentRiskThreshold
+  ) {
+    pushReason("risk-appetite-downshift", `Risk appetite fell below ${currentRiskThreshold}.`);
+  }
+
+  // Curve slope polarity shifts
+  const previousSlope = previous.scores.curveSlope;
+  const currentSlope = current.scores.curveSlope;
+  if (previousSlope !== null && currentSlope !== null) {
+    if (previousSlope >= 0 && currentSlope < 0) {
+      pushReason("curve-slope-negative", "Curve slope turned negative.");
+    } else if (previousSlope <= 0 && currentSlope > 0) {
+      pushReason("curve-slope-positive", "Curve slope turned positive.");
+    }
+  }
+
+  if (reasons.length === 0) {
+    pushReason("signals-updated", "Signal values updated since the last read.");
+  }
+
+  return reasons;
+};
+```
+
+<Tip>
+  Reason codes are **stackable**: a single alert can include multiple codes if several thresholds cross simultaneously.
+</Tip>
+
+## Alert Payload Structure
+
+Every alert includes full context:
+
+```typescript lib/signalOps.ts
+export type SignalAlertPayload = {
+  previousRecordDate: string;             // ISO date of previous assessment
+  currentRecordDate: string;              // ISO date of current assessment
+  previousAssessment: RegimeAssessment;   // Full previous regime state
+  currentAssessment: RegimeAssessment;    // Full current regime state
+  reasons: RegimeChangeReason[];          // List of reason codes with messages
+  sourceUrls: string[];                   // Treasury API source citations
+  timeMachineHref: string;                // Deep link to historical comparison
+};
+
+export type RegimeAlertEvent = {
+  id: string;                             // Unique alert ID
+  createdAt: string;                      // ISO timestamp
+  payload: SignalAlertPayload;            // Full alert payload
+};
+```
+
+<CodeGroup>
+```typescript Example Alert Event
+{
+  id: "alert_2024-03-15_001",
+  createdAt: "2024-03-15T14:32:00Z",
+  payload: {
+    previousRecordDate: "2024-03-08",
+    currentRecordDate: "2024-03-15",
+    previousAssessment: {
+      regime: "EXPANSION",
+      scores: { tightness: 58, riskAppetite: 65, ... },
+      // ... full assessment
+    },
+    currentAssessment: {
+      regime: "DEFENSIVE",
+      scores: { tightness: 74, riskAppetite: 52, ... },
+      // ... full assessment
+    },
+    reasons: [
+      { code: "regime-change", message: "Regime shifted from EXPANSION to DEFENSIVE." },
+      { code: "tightness-upshift", message: "Tightness crossed above 70." }
+    ],
+    sourceUrls: ["https://fiscaldata.treasury.gov/datasets/..."],
+    timeMachineHref: "/regime?month=3&year=2024"
+  }
+}
+```
+
+```typescript Alert Delivery Record
+export type AlertDeliveryEvent = {
+  id: string;                             // Delivery ID
+  alertId: string;                        // Parent alert ID
+  channel: AlertChannel;                  // "slack" | "email" | "webhook"
+  deliveredAt: string;                    // ISO timestamp
+  status: "sent" | "skipped";             // Delivery status
+  summary: string;                        // Human-readable summary
+};
+```
+</CodeGroup>
+
+## Weekly Digest
+
+Signal Ops generates weekly summaries of regime activity:
+
+```typescript lib/signalOps.ts
+export const buildWeeklyDigest = (alerts: RegimeAlertEvent[]) => {
+  const latest = alerts[0];
+  const previous = alerts[1];
+
+  if (!latest) {
+    return {
+      summary: "No regime-change alerts this week.",
+      bullets: ["Signals updated with no threshold crossings."],
+    };
+  }
+
+  const currentScores = latest.payload.currentAssessment.scores;
+  const previousScores = previous?.payload.currentAssessment.scores;
+  const tightnessDelta = previousScores ? currentScores.tightness - previousScores.tightness : 0;
+  const riskDelta = previousScores ? currentScores.riskAppetite - previousScores.riskAppetite : 0;
+
+  return {
+    summary: `${latest.payload.currentAssessment.regime} regime as of ${latest.payload.currentRecordDate}.`,
+    bullets: [
+      `Tightness delta: ${tightnessDelta >= 0 ? "+" : ""}${tightnessDelta.toFixed(2)}.`,
+      `Risk appetite delta: ${riskDelta >= 0 ? "+" : ""}${riskDelta.toFixed(2)}.`,
+      ...latest.payload.reasons.map((reason) => `${reason.code}: ${reason.message}`),
+    ],
+  };
+};
+```
+
+<Frame caption="Weekly Digest Example">
+  ```
+  DEFENSIVE regime as of 2024-03-15.
+  
+  - Tightness delta: +16.00.
+  - Risk appetite delta: -13.00.
+  - regime-change: Regime shifted from EXPANSION to DEFENSIVE.
+  - tightness-upshift: Tightness crossed above 70.
+  - risk-appetite-downshift: Risk appetite fell below 50.
+  ```
+</Frame>
+
+<Tip>
+  Weekly digests are ideal for asynchronous Slack channels or email summaries sent to leadership on Monday mornings.
+</Tip>
+
+## Alert Delivery
+
+Signal Ops supports multiple delivery channels:
+
+```typescript lib/signalOps.ts
+export type AlertChannel = "slack" | "email" | "webhook";
+```
+
+### Delivery Summary
+
+```typescript lib/signalOps.ts
+export const buildDeliverySummary = (alert: RegimeAlertEvent) => {
+  const reasons = alert.payload.reasons.map((reason) => reason.code).join(", ");
+  return `${alert.payload.currentAssessment.regime} (${alert.payload.currentRecordDate}) · ${reasons}`;
+};
+```
+
+<CodeGroup>
+```typescript Slack Example
+{
+  channel: "#planning",
+  status: "sent",
+  summary: "DEFENSIVE (2024-03-15) · regime-change, tightness-upshift"
+}
+```
+
+```typescript Email Example
+{
+  channel: "email",
+  status: "sent",
+  summary: "SCARCITY (2024-06-20) · regime-change, curve-slope-negative"
+}
+```
+
+```typescript Webhook Example
+{
+  channel: "webhook",
+  status: "sent",
+  summary: "EXPANSION (2024-01-10) · regime-change, risk-appetite-upshift"
+}
+```
+</CodeGroup>
+
+## Time Machine Deep Links
+
+Every alert includes a `timeMachineHref` for instant historical comparison:
+
+```typescript
+const timeMachineHref = `/regime?month=${month}&year=${year}`;
+```
+
+<Steps>
+  <Step title="Alert fires">
+    Signal Ops detects regime change from EXPANSION to DEFENSIVE
+  </Step>
+  <Step title="Generate Time Machine link">
+    Build URL pointing to the exact month/year of the change
+  </Step>
+  <Step title="Include in payload">
+    Add `timeMachineHref` to alert payload
+  </Step>
+  <Step title="Operator clicks link">
+    Opens Time Machine view with previous and current regime side-by-side
+  </Step>
+</Steps>
+
+<Info>
+  Time Machine links let you instantly compare "before" and "after" conditions without manual date selection.
+</Info>
+
+## Usage Example
+
+```typescript
+import { evaluateRegime, buildRegimeChangeReasons } from "@/lib/regimeEngine";
+import { shouldCreateSignalAlert, buildWeeklyDigest } from "@/lib/signalOps";
+import type { SignalAlertPayload, RegimeAlertEvent } from "@/lib/signalOps";
+
+// Fetch current and previous assessments
+const previousTreasury = await fetchTreasuryYields("2024-03-08");
+const currentTreasury = await fetchTreasuryYields("2024-03-15");
+
+const previousAssessment = evaluateRegime(previousTreasury);
+const currentAssessment = evaluateRegime(currentTreasury);
+
+// Generate reasons
+const reasons = buildRegimeChangeReasons(previousAssessment, currentAssessment);
+
+// Build payload
+const payload: SignalAlertPayload = {
+  previousRecordDate: previousTreasury.record_date,
+  currentRecordDate: currentTreasury.record_date,
+  previousAssessment,
+  currentAssessment,
+  reasons,
+  sourceUrls: [currentTreasury.source],
+  timeMachineHref: `/regime?month=3&year=2024`,
+};
+
+// Check if alert should fire
+const latestAlert = await getLatestAlert();
+if (shouldCreateSignalAlert(payload, latestAlert)) {
+  const alert: RegimeAlertEvent = {
+    id: generateAlertId(),
+    createdAt: new Date().toISOString(),
+    payload,
+  };
+  
+  await saveAlert(alert);
+  await deliverToSlack(alert);
+  
+  console.log("Alert fired:", buildDeliverySummary(alert));
+}
+
+// Generate weekly digest
+const recentAlerts = await getAlertsForWeek();
+const digest = buildWeeklyDigest(recentAlerts);
+console.log(digest.summary);
+digest.bullets.forEach((bullet) => console.log(`- ${bullet}`));
+```
+
+<Warning>
+  Always check `shouldCreateSignalAlert()` before firing alerts. Without cooldown logic, regime oscillations can spam channels.
+</Warning>
+
+## Related Features
+
+<CardGroup cols={2}>
+  <Card title="Regime Engine" icon="gauge-high" href="/features/regime-engine">
+    Understand regime classification logic
+  </Card>
+  <Card title="Decision Shield" icon="shield-check" href="/features/decision-shield">
+    Re-evaluate decisions when alerts fire
+  </Card>
+  <Card title="Time Machine" icon="clock-rotate-left" href="/features/time-machine">
+    Follow Time Machine links from alerts
+  </Card>
+  <Card title="Briefing Pack" icon="file-export" href="/features/briefing-pack">
+    Include alerts in weekly stakeholder briefs
+  </Card>
+</CardGroup>

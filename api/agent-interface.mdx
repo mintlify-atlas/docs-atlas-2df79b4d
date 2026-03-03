@@ -1,0 +1,316 @@
+---
+title: Agent Interface
+description: Programmatic access to Whether regime data for AI agents and MCP integrations
+---
+
+## Overview
+
+The Whether Agent Interface provides structured, machine-readable access to regime assessments for AI agents, automation tools, and Model Context Protocol (MCP) integrations.
+
+## Endpoint
+
+```
+GET /api/agent?cadence={cadence}
+```
+
+**Base URL:** `https://whether.fyi`
+
+### Parameters
+
+<ParamField path="cadence" type="string" default="weekly">
+  Time horizon for the summary. Options: `weekly`, `monthly`, `quarterly`, `yearly`
+</ParamField>
+
+### Response Schema
+
+```typescript
+{
+  cadence: "weekly" | "monthly" | "quarterly" | "yearly";
+  defaultCadence: "weekly";
+  supportedCadences: string[];
+  summary: {
+    copy: string;
+    provenance: string[];
+    recordDateLabel: string;
+  };
+  agentHandoff: {
+    payload: AgentPayload;
+    prompt: string;
+  };
+  summaryHash: string | null;
+  links: {
+    self: string;
+    llms: string;
+    discovery: string;
+  };
+  generatedAt: string;
+  version: "v1";
+}
+```
+
+### Agent Payload Structure
+
+The `agentHandoff.payload` contains structured regime data:
+
+```typescript
+{
+  report_date: string;
+  fetched_at: string;
+  source: string;
+  regime: {
+    key: string;
+    label: string;
+    description: string;
+  };
+  scores: {
+    tightness: number;
+    riskAppetite: number;
+  };
+  thresholds: {
+    tightness: { threshold: number; exceeded: boolean };
+    riskAppetite: { threshold: number; exceeded: boolean };
+  };
+  constraints: string[];
+  data_warnings: string[];
+  signals: Array<{
+    id: string;
+    label: string;
+    value: number | null;
+    unit: string;
+    record_date: string;
+    fetched_at: string;
+    source_url: string;
+  }>;
+  macro_signals: Array<{
+    id: string;
+    label: string;
+    value: number | null;
+    unit: string;
+    record_date: string;
+    fetched_at: string;
+    source_url: string;
+  }>;
+  skills: Array<{
+    id: string;
+    label: string;
+    purpose: string;
+    inputs: string[];
+    outputs: string[];
+  }>;
+  pm_handoff: {
+    decision_focus: string;
+    briefing_actions: string[];
+  };
+}
+```
+
+## Example Requests
+
+<Tabs>
+  <Tab title="cURL">
+    ```bash
+    curl https://whether.fyi/api/agent?cadence=weekly
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    const response = await fetch(
+      "https://whether.fyi/api/agent?cadence=weekly",
+      {
+        headers: { accept: "application/json" },
+        cache: "no-store"
+      }
+    );
+
+    const data = await response.json();
+    console.log(data.agentHandoff.payload.regime);
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import requests
+
+    response = requests.get(
+        "https://whether.fyi/api/agent",
+        params={"cadence": "weekly"},
+        headers={"accept": "application/json"}
+    )
+
+    data = response.json()
+    regime = data["agentHandoff"]["payload"]["regime"]
+    print(f"Current regime: {regime['label']}")
+    ```
+  </Tab>
+  <Tab title="TypeScript SDK">
+    ```typescript
+    import { pullRecentSiteInfo } from "whether/lib/agentInterface";
+
+    const info = await pullRecentSiteInfo({
+      cadence: "weekly",
+      siteBaseUrl: "https://whether.fyi"
+    });
+
+    console.log(info.payload.agentHandoff.payload.regime);
+    ```
+  </Tab>
+</Tabs>
+
+## Model Context Protocol (MCP)
+
+Whether provides an MCP server for seamless integration with Claude Desktop and other MCP-compatible tools.
+
+### Available Tools
+
+#### `get_agent_brief`
+
+Fetch a cadence-specific Whether summary with structured agent handoff payload and prompt.
+
+**Parameters:**
+- `cadence` (optional): `"weekly"` | `"monthly"` | `"quarterly"` | `"yearly"`
+
+**Returns:** Complete agent interface response with regime data.
+
+#### `list_agent_skills`
+
+List Whether agent skills expected by the agent handoff payload.
+
+**Parameters:** None
+
+**Returns:** Array of skill definitions with inputs and outputs.
+
+#### `pull_recent_site_info`
+
+Pull the latest Whether site agent brief from `/api/agent` for fresh site context.
+
+**Parameters:**
+- `cadence` (optional): Time horizon for the summary
+- `siteUrl` (optional): Custom base URL (defaults to production)
+
+**Returns:** Site URL, endpoint, cadence, and full payload.
+
+### MCP Server Setup
+
+<Steps>
+  <Step title="Install dependencies">
+    ```bash
+    bun install @modelcontextprotocol/sdk
+    ```
+  </Step>
+  <Step title="Configure Claude Desktop">
+    Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+    ```json
+    {
+      "mcpServers": {
+        "whether": {
+          "command": "bun",
+          "args": ["run", "/path/to/whether/scripts/mcp/whether-mcp-server.ts"]
+        }
+      }
+    }
+    ```
+  </Step>
+  <Step title="Restart Claude Desktop">
+    The Whether MCP tools will be available in the tool picker.
+  </Step>
+</Steps>
+
+### MCP Server Implementation
+
+The Whether MCP server is implemented in `scripts/mcp/whether-mcp-server.ts`:
+
+```typescript
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { buildAgentInterfaceResponse } from "../../lib/agentInterface";
+
+const server = new McpServer({
+  name: "whether-agent-interface",
+  version: "1.0.0",
+});
+
+server.tool(
+  "get_agent_brief",
+  "Fetch a cadence-specific Whether summary",
+  { cadence: z.enum(["weekly", "monthly", "quarterly", "yearly"]).optional() },
+  async ({ cadence }) => {
+    const response = await buildAgentInterfaceResponse(cadence ?? "weekly");
+    return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
+  }
+);
+
+const transport = new StdioServerTransport();
+await server.connect(transport);
+```
+
+## Agent Skills
+
+The agent payload includes skill definitions that guide downstream automation:
+
+### 1. Regime Summary
+
+**Purpose:** Explain the market climate in plain English with top macro signals.
+
+**Inputs:** `regime`, `scores`, `macro_signals`, `data_warnings`
+
+**Outputs:** `summary_bullets`
+
+### 2. Constraint Translation
+
+**Purpose:** Turn constraints into clear guardrails for roadmap, hiring, and pricing.
+
+**Inputs:** `constraints`, `thresholds`, `signals`
+
+**Outputs:** `constraint_brief`
+
+### 3. PM Question Log
+
+**Purpose:** Surface open questions the PM must answer before acting.
+
+**Inputs:** `constraints`, `signals`, `macro_signals`
+
+**Outputs:** `pm_questions`
+
+## Agent Prompt
+
+The `agentHandoff.prompt` field provides guidance for autonomous PM assistants:
+
+```
+You are an autonomous PM assistant.
+Follow the skills list in the JSON payload and deliver outputs in the same order.
+Use the JSON payload to draft:
+1) A 3-bullet summary of the market climate.
+2) The top 3 constraints that should shape roadmap decisions.
+3) A short list of questions to confirm with the PM before acting.
+
+Context: Whether Report for 2025-02-28 (CONSTRAINED_CAUTIOUS).
+```
+
+## Discovery
+
+Whether exposes machine-readable metadata at standard discovery endpoints:
+
+- **LLMs.txt:** `/llms.txt` - Site metadata for AI agents
+- **Agent Discovery:** `/.well-known/whether-agent.json` - API capabilities
+
+## Rate Limiting
+
+The agent API is designed for periodic polling:
+
+- Recommended interval: 1 hour for `weekly` cadence
+- Data freshes weekly with new Treasury reports
+- Use `summaryHash` to detect content changes
+
+## CORS
+
+The agent API includes CORS headers for browser-based integrations:
+
+```
+Access-Control-Allow-Origin: *
+Access-Control-Allow-Methods: GET, OPTIONS
+```
+
+## Related
+
+- [Webhook Integration](/api/webhook-integration) - Receive regime change notifications
+- [API Reference](/api/api-reference) - Complete endpoint documentation

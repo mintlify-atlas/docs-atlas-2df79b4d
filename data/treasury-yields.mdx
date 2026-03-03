@@ -1,0 +1,242 @@
+---
+title: Treasury Yields Data
+description: How Whether sources and processes US Treasury yield curve data
+---
+
+## Overview
+
+Whether uses US Treasury yield data from FRED (Federal Reserve Economic Data) to calculate the base rate and curve slope—the two foundational inputs for regime classification. This page documents the sourcing strategy, caching behavior, and fallback mechanisms.
+
+## Data Sources
+
+### FRED CSV Endpoints
+
+Whether fetches Treasury yields via direct CSV downloads from the Federal Reserve Bank of St. Louis:
+
+<ParamField path="oneMonth" type="string">
+  **Endpoint**: `https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS1MO`
+  
+  **Series**: 1-Month Treasury Constant Maturity Rate
+  
+  **Usage**: Primary base rate input
+</ParamField>
+
+<ParamField path="threeMonth" type="string">
+  **Endpoint**: `https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS3MO`
+  
+  **Series**: 3-Month Treasury Constant Maturity Rate
+  
+  **Usage**: Fallback base rate if 1M is unavailable
+</ParamField>
+
+<ParamField path="twoYear" type="string">
+  **Endpoint**: `https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS2`
+  
+  **Series**: 2-Year Treasury Constant Maturity Rate
+  
+  **Usage**: Short-end input for curve slope calculation
+</ParamField>
+
+<ParamField path="tenYear" type="string">
+  **Endpoint**: `https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10`
+  
+  **Series**: 10-Year Treasury Constant Maturity Rate
+  
+  **Usage**: Long-end input for curve slope calculation
+</ParamField>
+
+## Required Fields
+
+Whether requires the following yields to operate:
+
+- **1-Month OR 3-Month**: Used as the base rate proxy for cost of money
+- **2-Year**: Short-end anchor for curve slope
+- **10-Year**: Long-end anchor for curve slope
+
+If any required field is missing, Whether falls back to snapshot data with clear labeling.
+
+## Data Processing
+
+### Base Rate Calculation
+
+The base rate represents the short-term cost of money:
+
+```typescript
+// From lib/regimeEngine.ts:204
+export const getBaseRate = (yields: TreasuryYields) => {
+  if (typeof yields.oneMonth === 'number') {
+    return { value: yields.oneMonth, used: '1M' };
+  }
+  if (typeof yields.threeMonth === 'number') {
+    return { value: yields.threeMonth, used: '3M' };
+  }
+  return { value: 0, used: 'MISSING' };
+};
+```
+
+**Fallback Priority**:
+1. Use 1-Month yield
+2. If unavailable, use 3-Month yield
+3. If both missing, default to 0% and flag as `MISSING`
+
+### Curve Slope Calculation
+
+The curve slope measures risk appetite via the yield curve steepness:
+
+```typescript
+// From lib/regimeEngine.ts:214
+export const computeCurveSlope = (yields: TreasuryYields): number | null => {
+  const tenYear = yields.tenYear;
+  const twoYear = yields.twoYear;
+
+  if (typeof tenYear !== 'number' || typeof twoYear !== 'number') {
+    return null;
+  }
+
+  return tenYear - twoYear;
+};
+```
+
+**Formula**: `10Y - 2Y`
+
+- **Positive slope** (e.g., +1.5%): Longer-term rates are higher → healthy risk appetite
+- **Flat slope** (e.g., 0%): Long and short rates converge → caution building
+- **Inverted slope** (e.g., -0.5%): Short rates exceed long rates → risk aversion
+
+### Latest Common Date Logic
+
+Whether ensures all yield series align to the same record date:
+
+```typescript
+// From lib/treasury/treasuryClient.ts:54
+const findLatestCommonDate = (seriesMaps: Map<string, number | null>[]) => {
+  // Walk backward through dates until all series have valid numeric values
+  for (let index = firstSeriesDates.length - 1; index >= 0; index -= 1) {
+    const candidateDate = firstSeriesDates[index];
+    const hasAllValues = seriesMaps.every((series) => {
+      const value = series.get(candidateDate);
+      return typeof value === 'number';
+    });
+    if (hasAllValues) {
+      return candidateDate;
+    }
+  }
+  return null;
+};
+```
+
+This guarantees that Whether never mixes stale data from different trading days.
+
+## Caching Strategy
+
+Treasury data is fetched server-side with Next.js revalidation:
+
+- **Revalidate interval**: 24 hours (86400 seconds)
+- **Rationale**: Treasury rates are published end-of-day and rarely updated intraday
+- **Implementation**: Uses Next.js `fetch` with `next: { revalidate: 86400 }`
+
+<Note>
+Whether does not cache Treasury data in the client. All caching is handled by Next.js's server-side cache.
+</Note>
+
+## Fallback Mechanisms
+
+### Snapshot Data
+
+If the live fetch fails, Whether falls back to a checked-in snapshot:
+
+<ResponseField name="fallback_at" type="string">
+  ISO timestamp when the fallback was triggered
+</ResponseField>
+
+<ResponseField name="fallback_reason" type="string">
+  Human-readable reason for fallback (e.g., "Treasury API error: 503")
+</ResponseField>
+
+<ResponseField name="isLive" type="boolean" default={false}>
+  Set to `false` when using snapshot data. Triggers "OFFLINE" badge in UI.
+</ResponseField>
+
+### Time Machine Mode
+
+When viewing historical regimes, Whether uses pre-cached snapshots:
+
+```typescript
+// From lib/treasury/treasuryClient.ts:89
+if (options.asOf) {
+  const cachedSnapshot = findTimeMachineSnapshot(options.asOf);
+  if (cachedSnapshot) {
+    return cachedSnapshot;
+  }
+  // Fall back to snapshot with clear reason
+  return buildFallbackSnapshot(
+    options.snapshotFallback,
+    'Time Machine cache miss for historical selection.'
+  );
+}
+```
+
+## Response Structure
+
+<ResponseField name="source" type="string">
+  Always `"https://fred.stlouisfed.org"` for live data
+</ResponseField>
+
+<ResponseField name="record_date" type="string">
+  ISO date of the Treasury data (e.g., `"2024-03-15"`)
+</ResponseField>
+
+<ResponseField name="fetched_at" type="string">
+  ISO timestamp when Whether fetched the data
+</ResponseField>
+
+<ResponseField name="isLive" type="boolean">
+  `true` if fetched from FRED; `false` if using snapshot
+</ResponseField>
+
+<ResponseField name="yields" type="object">
+  <ResponseField name="oneMonth" type="number | null">
+    1-Month Treasury yield (percent)
+  </ResponseField>
+  
+  <ResponseField name="threeMonth" type="number | null">
+    3-Month Treasury yield (percent)
+  </ResponseField>
+  
+  <ResponseField name="twoYear" type="number | null">
+    2-Year Treasury yield (percent)
+  </ResponseField>
+  
+  <ResponseField name="tenYear" type="number | null">
+    10-Year Treasury yield (percent)
+  </ResponseField>
+</ResponseField>
+
+## Data Warnings
+
+Whether surfaces explicit warnings when data quality is compromised:
+
+- **"Base rate missing; defaulted to threshold for conservative scoring."**
+  - Triggered when both 1M and 3M yields are unavailable
+  - Scoring uses the `baseRateTightness` threshold as a safe default
+
+- **"Curve slope missing; defaulted to cautious floor for scoring."**
+  - Triggered when 2Y or 10Y yields are unavailable
+  - Scoring assumes the minimum slope (`-1.0%`) to avoid false optimism
+
+## Source Attribution
+
+All Treasury data displayed in Whether includes:
+
+- **Source label**: "US Treasury Fiscal Data API" (though fetched via FRED)
+- **Source URL**: Link to `fred.stlouisfed.org`
+- **Record date**: The official date of the yield data
+- **Fetched timestamp**: When Whether retrieved the data
+
+This ensures full traceability for audit and compliance.
+
+## Related
+
+- [Macro Indicators](/data/macro-indicators) - Additional economic signals
+- [Data Provenance](/data/provenance) - Freshness monitoring and audit trails
+- [Regime Scoring](/concepts/regime-scoring) - How yields feed into regime classification

@@ -1,0 +1,348 @@
+---
+title: Historical Analysis with Time Machine
+description: Use past regime data to validate current conditions and learn from transitions
+---
+
+Whether's **Time Machine** feature lets you compare current regime conditions to historical snapshots, helping you validate whether today's signals match past transitions and learn from regime patterns over time.
+
+## Why Historical Analysis Matters
+
+Regime classifications are only as useful as their **predictive stability**. Time Machine helps you:
+
+1. **Validate current regime:** Confirm whether today's tightness/risk appetite scores align with similar past periods
+2. **Anticipate transitions:** Spot patterns in how regimes shifted historically (e.g., DEFENSIVE → SCARCITY after curve inversions)
+3. **Calibrate confidence:** See how long regimes typically persist before flipping
+4. **Test decision timing:** Ask "what happened last time we were in SCARCITY with VIX > 30?"
+
+<Note>
+Historical analysis requires **at least 90 days of stored assessments** to generate meaningful comparisons. Whether auto-archives daily snapshots.
+</Note>
+
+---
+
+## Accessing Historical Data
+
+Whether stores regime assessments daily. The Time Machine API lets you query by date range or specific events:
+
+### Query by Date Range
+
+```typescript
+import { getRegimeHistory } from "@/lib/timeMachine";
+
+// Fetch regime assessments from past 90 days
+const history = await getRegimeHistory({
+  startDate: "2025-12-01",
+  endDate: "2026-03-01",
+});
+
+console.log(history);
+// Returns: Array<{ recordDate, regime, scores, diagnostics }>
+```
+
+---
+
+### Query by Regime Type
+
+Find all instances when a specific regime was active:
+
+```typescript
+const scarcityPeriods = await getRegimeHistory({
+  regime: "SCARCITY",
+  limit: 10, // Most recent 10 occurrences
+});
+```
+
+---
+
+### Query by Transition Events
+
+Find regime changes involving specific transitions:
+
+```typescript
+const transitions = await getRegimeTransitions({
+  fromRegime: "DEFENSIVE",
+  toRegime: "SCARCITY",
+  since: "2025-01-01",
+});
+
+console.log(transitions);
+// Returns: Array<{ transitionDate, previousRegime, currentRegime, reasons }>
+```
+
+---
+
+## Comparing Past Regimes to Current
+
+### Then-vs-Now Analysis
+
+Compare a historical snapshot to today's conditions:
+
+```typescript
+import { evaluateRegime } from "@/lib/regimeEngine";
+
+// Current regime
+const current = evaluateRegime(treasuryData, thresholds, macroSeries);
+
+// Historical regime (e.g., 90 days ago)
+const historical = await getRegimeHistory({ date: "2025-12-01" });
+const past = historical[0];
+
+// Compare scores
+const tightnessDelta = current.scores.tightness - past.scores.tightness;
+const riskDelta = current.scores.riskAppetite - past.scores.riskAppetite;
+
+console.log(`Tightness shift: ${tightnessDelta > 0 ? "+" : ""}${tightnessDelta}`);
+console.log(`Risk appetite shift: ${riskDelta > 0 ? "+" : ""}${riskDelta}`);
+```
+
+**Interpretation:**
+- **Positive tightness delta:** Capital conditions worsened
+- **Negative tightness delta:** Capital conditions improved
+- **Positive risk appetite delta:** Investor confidence improved
+- **Negative risk appetite delta:** Investor confidence worsened
+
+---
+
+### Regime Persistence Analysis
+
+Calculate how long the current regime has persisted:
+
+```typescript
+import { getRegimePersistence } from "@/lib/timeMachine";
+
+const persistence = await getRegimePersistence({
+  regime: current.regime,
+  asOfDate: treasuryData.record_date,
+});
+
+console.log(`${current.regime} has persisted for ${persistence.days} days.`);
+```
+
+**Typical persistence windows:**
+- **SCARCITY:** 60–180 days (Federal Reserve rate cycle durations)
+- **DEFENSIVE:** 30–90 days (transition regime)
+- **VOLATILE:** 45–120 days (market uncertainty periods)
+- **EXPANSION:** 90–365+ days (bull market runs)
+
+<Warning>
+If a regime persists for **less than 30 days**, confidence is LOW. Defer irreversible decisions until stability confirms.
+</Warning>
+
+---
+
+## Learning from Regime Transitions
+
+### Transition Velocity
+
+Measure how quickly scores shifted during past transitions:
+
+```typescript
+const transition = transitions[0];
+const velocityData = await getTransitionVelocity(transition.transitionDate);
+
+console.log(velocityData);
+// {
+//   daysToTransition: 14,
+//   tightnessVelocity: +5.2 pts/day,
+//   riskAppetiteVelocity: -3.8 pts/day,
+// }
+```
+
+**Use cases:**
+- **Fast transitions (less than 10 days):** Exogenous shocks (e.g., Fed surprise, geopolitical crisis). Decision Shield guardrails tighten.
+- **Slow transitions (more than 30 days):** Structural shifts (e.g., inflation trends, credit cycle). More time to adjust plans.
+
+---
+
+### Boundary Contributor Patterns
+
+Review which macro adjustments triggered past transitions:
+
+```typescript
+const transitionReasons = transitions.map((t) => t.reasons);
+
+// Example output:
+// [
+//   ["HY OAS stress", "VIX volatility shock"],
+//   ["VC funding slowdown", "Tech layoff pressure"],
+// ]
+```
+
+**Pattern recognition:**
+- **HY OAS stress + VIX shock:** Credit market fear → SCARCITY
+- **VC funding slowdown + Tech layoffs:** Tech recession → DEFENSIVE or SCARCITY
+- **All signals green:** Expansion conditions confirmed
+
+---
+
+## Historical Regime Charts
+
+Visualize regime history over time using the `/time-machine` UI:
+
+<Steps>
+  <Step title="Navigate to Time Machine">
+    From the Whether dashboard, click **Time Machine** in the sidebar.
+  </Step>
+
+  <Step title="Select date range">
+    Choose a lookback period:
+    - **30 days:** Recent volatility
+    - **90 days:** Quarterly regime patterns
+    - **365 days:** Annual cycle view
+  </Step>
+
+  <Step title="View regime timeline">
+    The chart displays:
+    - **Regime blocks:** Color-coded by regime type (SCARCITY = red, DEFENSIVE = orange, VOLATILE = yellow, EXPANSION = green)
+    - **Transition markers:** Vertical lines where regime flipped
+    - **Score overlays:** Tightness and risk appetite trend lines
+  </Step>
+
+  <Step title="Click a date to inspect">
+    Clicking any date opens a detailed modal with:
+    - Full regime assessment (scores, diagnostics, inputs)
+    - Macro adjustment contributors
+    - Comparison to current conditions (delta calculations)
+  </Step>
+</Steps>
+
+---
+
+## Use Case: Validating Current Scarcity
+
+**Scenario:** Today's regime is SCARCITY (tightness: 82, risk appetite: 38). You want to confirm whether this matches past SCARCITY periods.
+
+<Steps>
+  <Step title="Query past SCARCITY periods">
+    ```typescript
+    const pastScarcity = await getRegimeHistory({
+      regime: "SCARCITY",
+      limit: 5,
+    });
+    ```
+  </Step>
+
+  <Step title="Calculate average scores">
+    ```typescript
+    const avgTightness = pastScarcity.reduce((sum, r) => sum + r.scores.tightness, 0) / pastScarcity.length;
+    const avgRiskAppetite = pastScarcity.reduce((sum, r) => sum + r.scores.riskAppetite, 0) / pastScarcity.length;
+
+    console.log(`Historical SCARCITY average: T=${avgTightness}, RA=${avgRiskAppetite}`);
+    // Example output: T=79, RA=41
+    ```
+  </Step>
+
+  <Step title="Compare to current scores">
+    ```typescript
+    const tightnessDelta = 82 - avgTightness; // +3 pts
+    const riskDelta = 38 - avgRiskAppetite;  // -3 pts
+
+    console.log(`Current SCARCITY is ${tightnessDelta > 0 ? "tighter" : "looser"} than historical average.`);
+    // Output: "Current SCARCITY is tighter than historical average."
+    ```
+  </Step>
+
+  <Step title="Interpret and act">
+    **Interpretation:** Current SCARCITY is **more severe** than typical historical instances (higher tightness, lower risk appetite).
+
+    **Action:** Apply tighter guardrails. Defer all DANGEROUS decisions and escalate RISKY verdicts to leadership.
+  </Step>
+</Steps>
+
+---
+
+## Use Case: Anticipating Transitions
+
+**Scenario:** You're in DEFENSIVE (tightness: 73, risk appetite: 55). You want to know when DEFENSIVE typically transitions to SCARCITY.
+
+<Steps>
+  <Step title="Find past DEFENSIVE → SCARCITY transitions">
+    ```typescript
+    const transitions = await getRegimeTransitions({
+      fromRegime: "DEFENSIVE",
+      toRegime: "SCARCITY",
+      since: "2024-01-01",
+    });
+    ```
+  </Step>
+
+  <Step title="Analyze transition triggers">
+    ```typescript
+    const triggers = transitions.map((t) => t.reasons);
+
+    // Example output:
+    // [
+    //   ["risk-appetite-downshift", "VIX volatility shock"],
+    //   ["risk-appetite-downshift", "VC funding slowdown"],
+    // ]
+    ```
+
+    **Pattern:** DEFENSIVE → SCARCITY transitions are triggered by **risk appetite falling below 50** + **exogenous shocks** (VIX, VC slowdown).
+  </Step>
+
+  <Step title="Monitor current signals">
+    - Check VIX: Is it approaching 20+?
+    - Check VC funding velocity: Is it below -5%?
+    - Check risk appetite: Is it near 50 threshold?
+
+    If all three are trending negative, **transition to SCARCITY is likely within 10–20 days**.
+  </Step>
+
+  <Step title="Prepare decision stack">
+    - Pause new hiring requisitions
+    - Defer infrastructure spend
+    - Pre-brief leadership on potential SCARCITY transition
+  </Step>
+</Steps>
+
+---
+
+## Data Retention Policy
+
+Whether retains regime assessments according to these retention windows:
+
+| Data Type | Retention Period |
+|-----------|------------------|
+| **Daily assessments** | 2 years |
+| **Transition events** | 5 years |
+| **Macro series history** | 18 months (per signal source retention policy) |
+
+<Note>
+Historical data is stored in the same database as current assessments. No external data warehouse required.
+</Note>
+
+---
+
+## Exporting Historical Data
+
+Export regime history for offline analysis or integration with BI tools:
+
+```typescript
+import { exportRegimeHistory } from "@/lib/timeMachine";
+
+const csvData = await exportRegimeHistory({
+  startDate: "2025-01-01",
+  endDate: "2026-03-01",
+  format: "csv",
+});
+
+// Download or pipe to S3/GCS
+```
+
+**Export formats:**
+- **CSV:** For Excel/Google Sheets analysis
+- **JSON:** For API integrations or custom dashboards
+- **Parquet:** For data warehouse ingestion
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Understanding Regimes" icon="chart-line" href="/guides/understanding-regimes">
+    Learn how regime scores are calculated and classified
+  </Card>
+  <Card title="Alerts and Notifications" icon="bell" href="/guides/alerts-and-notifications">
+    Get notified when transitions match historical patterns
+  </Card>
+</CardGroup>
