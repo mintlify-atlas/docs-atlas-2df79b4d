@@ -84,7 +84,8 @@
               "api/weekly-digest",
               "api/monthly",
               "api/quarterly",
-              "api/yearly"
+              "api/yearly",
+              "api/cadence"
             ]
           },
           {
